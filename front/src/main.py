@@ -16,7 +16,7 @@ from pages import (
 
 if __name__ == "__main__":
     st.set_page_config(
-        page_title="Super Diary",
+        page_title="GodAssistant",
         page_icon="/assets/logo.png",
         layout="wide",
     )

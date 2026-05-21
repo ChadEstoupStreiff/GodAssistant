@@ -1,4 +1,5 @@
 import datetime
+from typing import List
 
 import requests
 import streamlit as st
@@ -14,6 +15,7 @@ PRIORITY_OPTIONS = [
     {"label": "Medium", "value": 1, "emoji": "🟡"},
     {"label": "High", "value": 2, "emoji": "🟧"},
     {"label": "Critical", "value": 3, "emoji": "🟥"},
+    {"label": "Bug", "value": 4, "emoji": "🐞"},
 ]
 
 
@@ -93,7 +95,7 @@ def delete_kanban_board(board_id):
 
 
 @st.dialog("🆕 Create new task", width="large")
-def create_task(column):
+def create_task(column, default_project: List[str] = []):
     st.markdown(
         "Enter the content of the new task for the column <a style='color: {}'>{}</a>".format(
             column["color"], column["name"]
@@ -125,6 +127,9 @@ def create_task(column):
     new_projects = st.multiselect(
         "Projects",
         options=[p["name"] for p in projects],
+        default=[
+            p for p in default_project if p in [proj["name"] for proj in projects]
+        ],
     )
     tags = requests.get("http://back:80/tags").json()
     new_tags = st.multiselect(
@@ -266,7 +271,9 @@ def edit_task(task):
         "Priority",
         options=PRIORITY_OPTIONS,
         format_func=lambda x: x["emoji"] + " " + x["label"],
-        index=[p["value"] for p in PRIORITY_OPTIONS].index(task["priority"]) if task["priority"] is not None else 0,
+        index=[p["value"] for p in PRIORITY_OPTIONS].index(task["priority"])
+        if task["priority"] is not None
+        else 0,
     )
 
     projects = requests.get("http://back:80/projects").json()
@@ -321,9 +328,27 @@ def organization():
     with st.sidebar:
         if st.button("🆕 Create Board", use_container_width=True):
             create_kanban_board()
-        in_sidebar_board_selector = st.toggle("📋 Board selector in sidebar", key="board_selector_sidebar_toggle", value=False)
-        show_edit_columns = st.toggle("✏️ Columns edit", key="show_edit_columns_toggle", value=False)
-        show_edit_tasks = st.toggle("✏️ Tasks edit", key="show_edit_tasks_toggle", value=True)
+        show_validated_tasks = st.toggle(
+            "✅ Show validated tasks", key="validated_tasks_toggle", value=False
+        )
+        in_sidebar_board_selector = st.toggle(
+            "📋 Board selector in sidebar",
+            key="board_selector_sidebar_toggle",
+            value=False,
+        )
+        show_edit_columns = st.toggle(
+            "✏️ Columns edit", key="show_edit_columns_toggle", value=False
+        )
+        show_edit_tasks = st.toggle(
+            "✏️ Tasks edit", key="show_edit_tasks_toggle", value=True
+        )
+        min_nbr_columns = st.slider(
+            "Minimum number of columns to display",
+            min_value=3,
+            max_value=10,
+            value=5,
+            key="min_nbr_columns_slider",
+        )
 
     kaban_boards = requests.get("http://back:80/kanban/boards").json()
 
@@ -352,7 +377,7 @@ def organization():
             "Select tags to filter",
             options=[t["name"] for t in tags],
         )
-    
+
     with cols[3]:
         selected_priorities = st.multiselect(
             "Select priorities to filter",
@@ -378,7 +403,10 @@ def organization():
             ).json()
 
         # MARK: COLUMNS
-        n_cols = max(len(board_info["columns"]) + 1, 5)
+        n_cols = max(
+            len(board_info["columns"]) + (1 if show_edit_columns else 0),
+            min_nbr_columns,
+        )
         columns = st.columns(n_cols)
         columns = [columns[i].container(border=True) for i in range(n_cols)]
         for i, column in enumerate(board_info["columns"]):
@@ -450,7 +478,7 @@ def organization():
                     use_container_width=True,
                     key=f"add_task_{column['id']}",
                 ):
-                    create_task(column)
+                    create_task(column, default_project=selected_projects)
 
                 # MARK: TASKS
                 for task in column["tasks"]:
@@ -462,9 +490,11 @@ def organization():
                         t in task["tags"] for t in selected_tags
                     ):
                         continue
-                    if (selected_priorities and not any(
+                    if selected_priorities and not any(
                         p["value"] == task["priority"] for p in selected_priorities
-                    )):
+                    ):
+                        continue
+                    if not show_validated_tasks and task["completed"]:
                         continue
                     with st.container(border=True):
                         if show_edit_tasks:
@@ -478,7 +508,9 @@ def organization():
                                 ):
                                     response = requests.put(
                                         "http://back:80/kanban/columns/{column_id}/tasks/{task_id}/move".format(
-                                            column_id=board_info["columns"][i - 1]["id"],
+                                            column_id=board_info["columns"][i - 1][
+                                                "id"
+                                            ],
                                             task_id=task["id"],
                                         )
                                     )
@@ -508,6 +540,15 @@ def organization():
                                     use_container_width=True,
                                     key=f"toggle_completed_{task['id']}",
                                 ):
+                                    if not task["completed"]:
+                                        response = requests.put(
+                                            "http://back:80/kanban/columns/{column_id}/tasks/{task_id}/move".format(
+                                                column_id=board_info["columns"][- 1][
+                                                    "id"
+                                                ],
+                                                task_id=task["id"],
+                                            )
+                                        )
                                     response = requests.put(
                                         "http://back:80/tasks/{}/complete".format(
                                             task["id"]
@@ -515,7 +556,8 @@ def organization():
                                     )
                                     if response.status_code == 200:
                                         toast_for_rerun(
-                                            "Task status updated successfully!", icon="✅"
+                                            "Task status updated successfully!",
+                                            icon="✅",
                                         )
                                         st.rerun()
                                     else:
@@ -535,7 +577,9 @@ def organization():
                                 ):
                                     response = requests.put(
                                         "http://back:80/kanban/columns/{column_id}/tasks/{task_id}/move".format(
-                                            column_id=board_info["columns"][i + 1]["id"],
+                                            column_id=board_info["columns"][i + 1][
+                                                "id"
+                                            ],
                                             task_id=task["id"],
                                         )
                                     )
@@ -554,11 +598,17 @@ def organization():
                                         )
 
                         priority = next(
-                            (p for p in PRIORITY_OPTIONS if p["value"] == task["priority"]),
+                            (
+                                p
+                                for p in PRIORITY_OPTIONS
+                                if p["value"] == task["priority"]
+                            ),
                             None,
                         )
                         st.markdown(
-                            f"### {priority['emoji']} **{task['title']}**" if priority else f"### **{task['title']}**"
+                            f"### {priority['emoji']} **{task['title']}**"
+                            if priority
+                            else f"### **{task['title']}**"
                         )
                         if task["description"]:
                             st.markdown(task["description"])
@@ -605,37 +655,38 @@ def organization():
                             )
 
         # MARK: ADD NEW COLUMN
-        with columns[-1]:
-            st.markdown("### Add a new column")
-            cols = st.columns([4, 1])
-            new_column_name = cols[0].text_input(
-                "Name", placeholder="Enter the name of the new column"
-            )
-            new_column_color = cols[1].color_picker("Color", value="#FFFFFF")
-            if st.button("Add Column", use_container_width=True):
-                if not new_column_name:
-                    st.error("Column name cannot be empty.")
-                    return
-
-                response = requests.post(
-                    "http://back:80/kanban/boards/{}/columns".format(
-                        selected_board["id"]
-                    ),
-                    json={
-                        "name": new_column_name,
-                        "color": new_column_color,
-                        "position": len(board_info["columns"]),
-                    },
+        if show_edit_columns:
+            with columns[-1]:
+                st.markdown("### Add a new column")
+                cols = st.columns([4, 1])
+                new_column_name = cols[0].text_input(
+                    "Name", placeholder="Enter the name of the new column"
                 )
+                new_column_color = cols[1].color_picker("Color", value="#FFFFFF")
+                if st.button("Add Column", use_container_width=True):
+                    if not new_column_name:
+                        st.error("Column name cannot be empty.")
+                        return
 
-                if response.status_code == 200:
-                    toast_for_rerun("Column added successfully!", icon="✅")
-                    st.rerun()
-                else:
-                    st.error(
-                        f"Failed to add column. Please try again. {response.status_code} : {response.text}"
+                    response = requests.post(
+                        "http://back:80/kanban/boards/{}/columns".format(
+                            selected_board["id"]
+                        ),
+                        json={
+                            "name": new_column_name,
+                            "color": new_column_color,
+                            "position": len(board_info["columns"]),
+                        },
                     )
-                    st.toast("Failed to add column. Please try again.", icon="❌")
+
+                    if response.status_code == 200:
+                        toast_for_rerun("Column added successfully!", icon="✅")
+                        st.rerun()
+                    else:
+                        st.error(
+                            f"Failed to add column. Please try again. {response.status_code} : {response.text}"
+                        )
+                        st.toast("Failed to add column. Please try again.", icon="❌")
 
 
 if __name__ == "__main__":

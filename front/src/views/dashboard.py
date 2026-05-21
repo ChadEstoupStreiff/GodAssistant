@@ -1,5 +1,6 @@
 import datetime
 import json
+import urllib.parse
 
 import requests
 import streamlit as st
@@ -105,9 +106,15 @@ def dialog_upload(files):
     ):
         with st.spinner("Saving files...", show_time=True):
             files_payload = [("files", (file.name, file, file.type)) for file in files]
-            request = f"http://back:80/files/upload?subdirectory=uploads&file_edit_info={json.dumps(file_edit_info)}&projects={json.dumps(selected_projects)}&tags={json.dumps(selected_tags)}"
+            params = {
+                "subdirectory": "uploads",
+                "file_edit_info": json.dumps(file_edit_info),
+                "projects": json.dumps(selected_projects),
+                "tags": json.dumps(selected_tags),
+            }
             if not toggle_edit_date:
-                request += f"&date={date.strftime('%Y-%m-%d')}"
+                params["date"] = date.strftime("%Y-%m-%d")
+            request = f"http://back:80/files/upload?{urllib.parse.urlencode(params)}"
             response = requests.post(
                 request,
                 files=files_payload,
@@ -130,7 +137,7 @@ def dashboard():
     Render the dashboard page.
     """
     user_name = dotenv_values("/.env").get("USER_NAME", "User").lower().capitalize()
-    st.write(f"Welcome to the Super Diary Dashboard, {user_name}!")
+    st.write(f"Welcome to the GodAssistant Dashboard, {user_name}!")
     cols = st.columns([2, 1])
 
     with cols[1]:

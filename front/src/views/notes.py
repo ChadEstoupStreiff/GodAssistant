@@ -1,6 +1,7 @@
 import datetime
 import json
 import tempfile
+import urllib.parse
 
 import requests
 import streamlit as st
@@ -173,10 +174,11 @@ def notes():
 
                     with open(tmpfile_path, "rb") as f:
                         files_payload = [("files", (opened_note, f, "text/markdown"))]
-                        query = (
-                            f"http://back:80/files/upload?subdirectory={note_subdir}"
-                            f"&file_edit_info={json.dumps(file_edit_info)}"
-                        )
+                        params = {
+                            "subdirectory": note_subdir,
+                            "file_edit_info": json.dumps(file_edit_info),
+                        }
+                        query = f"http://back:80/files/upload?{urllib.parse.urlencode(params)}"
 
                         response = requests.post(query, files=files_payload)
 

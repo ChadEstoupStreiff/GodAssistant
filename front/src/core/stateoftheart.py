@@ -378,7 +378,8 @@ def format_BibTeX(files: List[Dict[str, Any]]) -> str:
         issue = file.get("issue", "")
         pages = file.get("pages", "")
         doi = file.get("doi", "")
-        bibtex_entry = f"@article{{ref{idx + 1},\n"
+        refid = f"{authors.split(',')[0].split()[0]}{year}{title.split()[0]}"
+        bibtex_entry = f"@article{{{refid},\n"
         bibtex_entry += f"  author = {{{authors}}},\n"
         bibtex_entry += f"  title = {{{title}}},\n"
         bibtex_entry += f"  journal = {{{journal}}},\n"
