@@ -1,4 +1,6 @@
+import calendar
 import datetime
+from collections import defaultdict
 from typing import List
 
 import requests
@@ -324,30 +326,234 @@ def edit_task(task):
             st.toast("Failed to update task. Please try again.", icon="❌")
 
 
+def _get_priority(task):
+    return next((p for p in PRIORITY_OPTIONS if p["value"] == task["priority"]), None)
+
+
+def _collect_filtered_tasks(board_info, selected_projects, selected_tags, selected_priorities, show_validated_tasks):
+    tasks = []
+    seen_ids = set()
+    for column in board_info["columns"]:
+        for task in column["tasks"]:
+            if task["id"] in seen_ids:
+                continue
+            seen_ids.add(task["id"])
+            if selected_projects and not any(p in task["projects"] for p in selected_projects):
+                continue
+            if selected_tags and not any(t in task["tags"] for t in selected_tags):
+                continue
+            if selected_priorities and not any(p["value"] == task["priority"] for p in selected_priorities):
+                continue
+            if not show_validated_tasks and task["completed"]:
+                continue
+            tasks.append(task)
+    return tasks
+
+
+def _view_calendar(board_info, projects, tags, selected_projects, selected_tags, selected_priorities):
+    all_tasks = _collect_filtered_tasks(board_info, selected_projects, selected_tags, selected_priorities, True)
+    tasks_with_due = [t for t in all_tasks if t["end_date"]]
+
+    today = datetime.date.today()
+    if "org_cal_year" not in st.session_state:
+        st.session_state.org_cal_year = today.year
+    if "org_cal_month" not in st.session_state:
+        st.session_state.org_cal_month = today.month
+
+    nav_cols = st.columns([1, 4, 1])
+    with nav_cols[0]:
+        if st.button("◀ Prev", use_container_width=True):
+            if st.session_state.org_cal_month == 1:
+                st.session_state.org_cal_month = 12
+                st.session_state.org_cal_year -= 1
+            else:
+                st.session_state.org_cal_month -= 1
+            st.rerun()
+    with nav_cols[1]:
+        month_label = datetime.date(
+            st.session_state.org_cal_year, st.session_state.org_cal_month, 1
+        ).strftime("%B %Y")
+        st.markdown(
+            f"<h3 style='text-align:center; margin:0'>{month_label}</h3>",
+            unsafe_allow_html=True,
+        )
+    with nav_cols[2]:
+        if st.button("Next ▶", use_container_width=True):
+            if st.session_state.org_cal_month == 12:
+                st.session_state.org_cal_month = 1
+                st.session_state.org_cal_year += 1
+            else:
+                st.session_state.org_cal_month += 1
+            st.rerun()
+
+    task_map = defaultdict(list)
+    for task in tasks_with_due:
+        due = datetime.datetime.strptime(task["end_date"], "%Y-%m-%dT%H:%M:%S").date()
+        task_map[due].append(task)
+
+    day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    header_cols = st.columns(7)
+    for i, name in enumerate(day_names):
+        header_cols[i].markdown(
+            f"<div style='text-align:center; font-weight:bold; padding:4px 0; border-bottom:1px solid #444'>{name}</div>",
+            unsafe_allow_html=True,
+        )
+
+    month_weeks = calendar.monthcalendar(
+        st.session_state.org_cal_year, st.session_state.org_cal_month
+    )
+    for week in month_weeks:
+        week_cols = st.columns(7)
+        for day_idx, day_num in enumerate(week):
+            with week_cols[day_idx]:
+                with st.container(height=150, border=True):
+                    if day_num != 0:
+                        current_date = datetime.date(
+                            st.session_state.org_cal_year,
+                            st.session_state.org_cal_month,
+                            day_num,
+                        )
+                        is_today = current_date == today
+                        day_tasks = task_map.get(current_date, [])
+                        num_style = "color:#FF6B6B; font-weight:bold;" if is_today else "color:gray;"
+                        dot = " ●" if is_today else ""
+                        st.markdown(
+                            f"<div style='text-align:center; {num_style}'>{day_num}{dot}</div>",
+                            unsafe_allow_html=True,
+                        )
+                        for task in day_tasks:
+                            priority = _get_priority(task)
+                            emoji = (priority["emoji"] + " ") if priority else ""
+                            if task["completed"]:
+                                st.markdown(f"~~{emoji}{task['title']}~~")
+                            else:
+                                st.markdown(f"{emoji}{task['title']}")
+
+
+def _render_timeline_group(due_date, tasks, projects, tags, show_edit_tasks, today):
+    days_diff = (due_date - today).days
+    if days_diff < 0:
+        n = -days_diff
+        date_label = f"🔴 {due_date.strftime('%A, %B %d %Y')} — {n} day{'s' if n != 1 else ''} overdue"
+    elif days_diff == 0:
+        date_label = f"🟡 {due_date.strftime('%A, %B %d %Y')} — Today"
+    elif days_diff == 1:
+        date_label = f"🟠 {due_date.strftime('%A, %B %d %Y')} — In 1 day"
+    elif days_diff <= 7:
+        date_label = f"🟢 {due_date.strftime('%A, %B %d %Y')} — In {days_diff} days"
+    else:
+        date_label = f"📅 {due_date.strftime('%A, %B %d %Y')} — In {days_diff} days"
+
+    st.markdown(f"### {date_label}")
+
+    for task in tasks:
+        priority = _get_priority(task)
+        if task["completed"]:
+            emoji = (priority["emoji"] + " ") if priority else ""
+            title_text = f"~~{emoji}{task['title']}~~"
+        else:
+            title_text = f"{priority['emoji']} **{task['title']}**" if priority else f"**{task['title']}**"
+        with st.container(border=True):
+            title_cols = st.columns([9, 1])
+            title_cols[0].markdown(f"#### {title_text}")
+            with title_cols[1]:
+                if show_edit_tasks:
+                    if st.button(
+                        "✏️",
+                        key=f"tl_edit_{task['id']}",
+                        use_container_width=True,
+                    ):
+                        edit_task(task)
+                if st.button(
+                    "❌" if task["completed"] else "✅",
+                    key=f"tl_complete_{task['id']}",
+                    use_container_width=True,
+                ):
+                    response = requests.put(
+                        "http://back:80/tasks/{}/complete".format(task["id"])
+                    )
+                    if response.status_code == 200:
+                        toast_for_rerun("Task status updated successfully!", icon="✅")
+                        st.rerun()
+                    else:
+                        st.error(
+                            f"Failed to update task status. {response.status_code} : {response.text}"
+                        )
+                        st.toast("Failed to update task status. Please try again.", icon="❌")
+
+            if task["description"]:
+                st.markdown(task["description"])
+
+            if task["start_date"]:
+                start = datetime.datetime.strptime(task["start_date"], "%Y-%m-%dT%H:%M:%S")
+                st.markdown(f"🗓️ Start: {start.strftime('%d-%m-%Y')}")
+
+            if task["projects"]:
+                task_projects = [p for p in projects if p["name"] in task["projects"]]
+                st.markdown(
+                    generate_aside_project_markdown(
+                        [p["name"] for p in task_projects],
+                        [p["color"] for p in task_projects],
+                    ),
+                    unsafe_allow_html=True,
+                )
+            if task["tags"]:
+                task_tags = [t for t in tags if t["name"] in task["tags"]]
+                st.markdown(
+                    generate_aside_tag_markdown(
+                        [t["name"] for t in task_tags],
+                        [t["color"] for t in task_tags],
+                    ),
+                    unsafe_allow_html=True,
+                )
+
+    st.divider()
+
+
+def _view_timeline(board_info, projects, tags, selected_projects, selected_tags, selected_priorities, show_edit_tasks):
+    all_tasks = _collect_filtered_tasks(board_info, selected_projects, selected_tags, selected_priorities, True)
+    tasks_with_due = [t for t in all_tasks if t["end_date"]]
+
+    if not tasks_with_due:
+        st.info("No tasks with a due date found in this board.")
+        return
+
+    grouped = defaultdict(list)
+    for task in tasks_with_due:
+        due = datetime.datetime.strptime(task["end_date"], "%Y-%m-%dT%H:%M:%S").date()
+        grouped[due].append(task)
+
+    today = datetime.date.today()
+    incoming_dates = sorted(d for d in grouped if (d - today).days >= 0)
+    overdue_dates = sorted((d for d in grouped if (d - today).days < 0), reverse=True)
+
+    col_in, col_over = st.columns(2)
+
+    with col_in:
+        st.markdown("### 📅 Incoming")
+        st.divider()
+        if not incoming_dates:
+            st.info("No upcoming tasks.")
+        for due_date in incoming_dates:
+            _render_timeline_group(due_date, grouped[due_date], projects, tags, show_edit_tasks, today)
+
+    with col_over:
+        st.markdown("### 🔴 Overdue")
+        st.divider()
+        if not overdue_dates:
+            st.info("No overdue tasks.")
+        for due_date in overdue_dates:
+            _render_timeline_group(due_date, grouped[due_date], projects, tags, show_edit_tasks, today)
+
+
 def organization():
     with st.sidebar:
         if st.button("🆕 Create Board", use_container_width=True):
             create_kanban_board()
-        show_validated_tasks = st.toggle(
-            "✅ Show validated tasks", key="validated_tasks_toggle", value=False
-        )
         in_sidebar_board_selector = st.toggle(
             "📋 Board selector in sidebar",
             key="board_selector_sidebar_toggle",
             value=False,
-        )
-        show_edit_columns = st.toggle(
-            "✏️ Columns edit", key="show_edit_columns_toggle", value=False
-        )
-        show_edit_tasks = st.toggle(
-            "✏️ Tasks edit", key="show_edit_tasks_toggle", value=True
-        )
-        min_nbr_columns = st.slider(
-            "Minimum number of columns to display",
-            min_value=3,
-            max_value=10,
-            value=5,
-            key="min_nbr_columns_slider",
         )
 
     kaban_boards = requests.get("http://back:80/kanban/boards").json()
@@ -384,6 +590,35 @@ def organization():
             options=PRIORITY_OPTIONS,
             format_func=lambda x: x["emoji"] + " " + x["label"],
         )
+    
+    with cols[4]:
+        view_mode = st.segmented_control(
+            "View",
+            ["Kanban", "Calendar", "Timeline"],
+            default="Kanban",
+            key="org_view_mode",
+        )
+    
+    
+    with st.sidebar:
+        if view_mode == "Kanban" or view_mode == "Timeline":
+            show_edit_tasks = st.toggle(
+                "✏️ Tasks edit", key="show_edit_tasks_toggle", value=True
+            )
+        if view_mode == "Kanban":
+            show_edit_columns = st.toggle(
+                "✏️ Columns edit", key="show_edit_columns_toggle", value=False
+            )
+            show_validated_tasks = st.toggle(
+                "✅ Show validated tasks", key="validated_tasks_toggle", value=False
+            )
+            min_nbr_columns = st.slider(
+                "Minimum number of columns to display",
+                min_value=3,
+                max_value=10,
+                value=5,
+                key="min_nbr_columns_slider",
+            )
 
     if selected_board:
         with st.sidebar:
@@ -397,296 +632,303 @@ def organization():
 
         st.markdown(f"## {selected_board['name']}")
         st.markdown(f"{selected_board['description']}")
+
         with st.spinner("Loading board..."):
             board_info = requests.get(
                 "http://back:80/kanban/boards/{}".format(selected_board["id"])
             ).json()
 
-        # MARK: COLUMNS
-        n_cols = max(
-            len(board_info["columns"]) + (1 if show_edit_columns else 0),
-            min_nbr_columns,
-        )
-        columns = st.columns(n_cols)
-        columns = [columns[i].container(border=True) for i in range(n_cols)]
-        for i, column in enumerate(board_info["columns"]):
-            with columns[i]:
-                if show_edit_columns:
-                    cols = st.columns(3)
-                    with cols[0]:
-                        if st.button(
-                            "⬅️",
-                            use_container_width=True,
-                            key=f"move_left_{column['id']}",
-                            disabled=i == 0,
-                        ):
-                            response = requests.put(
-                                "http://back:80/kanban/columns/{}/move/left".format(
-                                    column["id"]
-                                )
-                            )
-                            if response.status_code == 200:
-                                toast_for_rerun(
-                                    "Column moved left successfully!", icon="✅"
-                                )
-                                st.rerun()
-                            else:
-                                st.error(
-                                    f"Failed to move column left. Please try again. {response.status_code} : {response.text}"
-                                )
-                                st.toast(
-                                    "Failed to move column left. Please try again.",
-                                    icon="❌",
-                                )
-                    with cols[1]:
-                        if st.button(
-                            "✏️", use_container_width=True, key=f"edit_{column['id']}"
-                        ):
-                            edit_kanban_column(column, board_info["id"])
-                    with cols[2]:
-                        if st.button(
-                            "➡️",
-                            use_container_width=True,
-                            key=f"move_right_{column['id']}",
-                            disabled=i == len(board_info["columns"]) - 1,
-                        ):
-                            response = requests.put(
-                                "http://back:80/kanban/columns/{}/move/right".format(
-                                    column["id"]
-                                )
-                            )
-                            if response.status_code == 200:
-                                toast_for_rerun(
-                                    "Column moved right successfully!", icon="✅"
-                                )
-                                st.rerun()
-                            else:
-                                st.error(
-                                    f"Failed to move column right. Please try again. {response.status_code} : {response.text}"
-                                )
-                                st.toast(
-                                    "Failed to move column right. Please try again.",
-                                    icon="❌",
-                                )
-                st.markdown(
-                    f"<div style='font-size: 2em; font-weight: bold; width: 100%; display: flex; justify-content: center; align-items: center; color: {column['color']}'>{column['name']}</div>",
-                    unsafe_allow_html=True,
-                )
-
-                if st.button(
-                    "➕ Add Task",
-                    use_container_width=True,
-                    key=f"add_task_{column['id']}",
-                ):
-                    create_task(column, default_project=selected_projects)
-
-                # MARK: TASKS
-                for task in column["tasks"]:
-                    if selected_projects and not any(
-                        p in task["projects"] for p in selected_projects
-                    ):
-                        continue
-                    if selected_tags and not any(
-                        t in task["tags"] for t in selected_tags
-                    ):
-                        continue
-                    if selected_priorities and not any(
-                        p["value"] == task["priority"] for p in selected_priorities
-                    ):
-                        continue
-                    if not show_validated_tasks and task["completed"]:
-                        continue
-                    with st.container(border=True):
-                        if show_edit_tasks:
-                            cols = st.columns(4)
-                            with cols[0]:
-                                if st.button(
-                                    "⬅️",
-                                    use_container_width=True,
-                                    key=f"move_left_{task['id']}",
-                                    disabled=i == 0,
-                                ):
-                                    response = requests.put(
-                                        "http://back:80/kanban/columns/{column_id}/tasks/{task_id}/move".format(
-                                            column_id=board_info["columns"][i - 1][
-                                                "id"
-                                            ],
-                                            task_id=task["id"],
-                                        )
+        if view_mode == "Calendar":
+            _view_calendar(
+                board_info, projects, tags,
+                selected_projects, selected_tags, selected_priorities,
+            )
+        elif view_mode == "Timeline":
+            _view_timeline(
+                board_info, projects, tags,
+                selected_projects, selected_tags, selected_priorities,
+                show_edit_tasks,
+            )
+        else:
+            # MARK: COLUMNS (Kanban)
+            n_cols = max(
+                len(board_info["columns"]) + (1 if show_edit_columns else 0),
+                min_nbr_columns,
+            )
+            columns = st.columns(n_cols)
+            columns = [columns[i].container(border=True) for i in range(n_cols)]
+            for i, column in enumerate(board_info["columns"]):
+                with columns[i]:
+                    if show_edit_columns:
+                        cols = st.columns(3)
+                        with cols[0]:
+                            if st.button(
+                                "⬅️",
+                                use_container_width=True,
+                                key=f"move_left_{column['id']}",
+                                disabled=i == 0,
+                            ):
+                                response = requests.put(
+                                    "http://back:80/kanban/columns/{}/move/left".format(
+                                        column["id"]
                                     )
-                                    if response.status_code == 200:
-                                        toast_for_rerun(
-                                            "Task moved left successfully!", icon="✅"
-                                        )
-                                        st.rerun()
-                                    else:
-                                        st.error(
-                                            f"Failed to move task left. Please try again. {response.status_code} : {response.text}"
-                                        )
-                                        st.toast(
-                                            "Failed to move task left. Please try again.",
-                                            icon="❌",
-                                        )
-                            with cols[1]:
-                                if st.button(
-                                    "✏️",
-                                    use_container_width=True,
-                                    key=f"edit_{task['id']}",
-                                ):
-                                    edit_task(task)
-                            with cols[2]:
-                                if st.button(
-                                    "❌" if task["completed"] else "✅",
-                                    use_container_width=True,
-                                    key=f"toggle_completed_{task['id']}",
-                                ):
-                                    if not task["completed"]:
+                                )
+                                if response.status_code == 200:
+                                    toast_for_rerun(
+                                        "Column moved left successfully!", icon="✅"
+                                    )
+                                    st.rerun()
+                                else:
+                                    st.error(
+                                        f"Failed to move column left. Please try again. {response.status_code} : {response.text}"
+                                    )
+                                    st.toast(
+                                        "Failed to move column left. Please try again.",
+                                        icon="❌",
+                                    )
+                        with cols[1]:
+                            if st.button(
+                                "✏️", use_container_width=True, key=f"edit_{column['id']}"
+                            ):
+                                edit_kanban_column(column, board_info["id"])
+                        with cols[2]:
+                            if st.button(
+                                "➡️",
+                                use_container_width=True,
+                                key=f"move_right_{column['id']}",
+                                disabled=i == len(board_info["columns"]) - 1,
+                            ):
+                                response = requests.put(
+                                    "http://back:80/kanban/columns/{}/move/right".format(
+                                        column["id"]
+                                    )
+                                )
+                                if response.status_code == 200:
+                                    toast_for_rerun(
+                                        "Column moved right successfully!", icon="✅"
+                                    )
+                                    st.rerun()
+                                else:
+                                    st.error(
+                                        f"Failed to move column right. Please try again. {response.status_code} : {response.text}"
+                                    )
+                                    st.toast(
+                                        "Failed to move column right. Please try again.",
+                                        icon="❌",
+                                    )
+                    st.markdown(
+                        f"<div style='font-size: 2em; font-weight: bold; width: 100%; display: flex; justify-content: center; align-items: center; color: {column['color']}'>{column['name']}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                    if st.button(
+                        "➕ Add Task",
+                        use_container_width=True,
+                        key=f"add_task_{column['id']}",
+                    ):
+                        create_task(column, default_project=selected_projects)
+
+                    # MARK: TASKS
+                    for task in column["tasks"]:
+                        if selected_projects and not any(
+                            p in task["projects"] for p in selected_projects
+                        ):
+                            continue
+                        if selected_tags and not any(
+                            t in task["tags"] for t in selected_tags
+                        ):
+                            continue
+                        if selected_priorities and not any(
+                            p["value"] == task["priority"] for p in selected_priorities
+                        ):
+                            continue
+                        if not show_validated_tasks and task["completed"]:
+                            continue
+                        with st.container(border=True):
+                            if show_edit_tasks:
+                                cols = st.columns(4)
+                                with cols[0]:
+                                    if st.button(
+                                        "⬅️",
+                                        use_container_width=True,
+                                        key=f"move_left_{task['id']}",
+                                        disabled=i == 0,
+                                    ):
                                         response = requests.put(
                                             "http://back:80/kanban/columns/{column_id}/tasks/{task_id}/move".format(
-                                                column_id=board_info["columns"][- 1][
-                                                    "id"
-                                                ],
+                                                column_id=board_info["columns"][i - 1]["id"],
                                                 task_id=task["id"],
                                             )
                                         )
-                                    response = requests.put(
-                                        "http://back:80/tasks/{}/complete".format(
-                                            task["id"]
+                                        if response.status_code == 200:
+                                            toast_for_rerun(
+                                                "Task moved left successfully!", icon="✅"
+                                            )
+                                            st.rerun()
+                                        else:
+                                            st.error(
+                                                f"Failed to move task left. Please try again. {response.status_code} : {response.text}"
+                                            )
+                                            st.toast(
+                                                "Failed to move task left. Please try again.",
+                                                icon="❌",
+                                            )
+                                with cols[1]:
+                                    if st.button(
+                                        "✏️",
+                                        use_container_width=True,
+                                        key=f"edit_{task['id']}",
+                                    ):
+                                        edit_task(task)
+                                with cols[2]:
+                                    if st.button(
+                                        "❌" if task["completed"] else "✅",
+                                        use_container_width=True,
+                                        key=f"toggle_completed_{task['id']}",
+                                    ):
+                                        if not task["completed"]:
+                                            response = requests.put(
+                                                "http://back:80/kanban/columns/{column_id}/tasks/{task_id}/move".format(
+                                                    column_id=board_info["columns"][-1]["id"],
+                                                    task_id=task["id"],
+                                                )
+                                            )
+                                        response = requests.put(
+                                            "http://back:80/tasks/{}/complete".format(
+                                                task["id"]
+                                            )
                                         )
-                                    )
-                                    if response.status_code == 200:
-                                        toast_for_rerun(
-                                            "Task status updated successfully!",
-                                            icon="✅",
+                                        if response.status_code == 200:
+                                            toast_for_rerun(
+                                                "Task status updated successfully!",
+                                                icon="✅",
+                                            )
+                                            st.rerun()
+                                        else:
+                                            st.error(
+                                                f"Failed to update task status. Please try again. {response.status_code} : {response.text}"
+                                            )
+                                            st.toast(
+                                                "Failed to update task status. Please try again.",
+                                                icon="❌",
+                                            )
+                                with cols[3]:
+                                    if st.button(
+                                        "➡️",
+                                        use_container_width=True,
+                                        key=f"move_right_{task['id']}",
+                                        disabled=i == len(board_info["columns"]) - 1,
+                                    ):
+                                        response = requests.put(
+                                            "http://back:80/kanban/columns/{column_id}/tasks/{task_id}/move".format(
+                                                column_id=board_info["columns"][i + 1]["id"],
+                                                task_id=task["id"],
+                                            )
                                         )
-                                        st.rerun()
-                                    else:
-                                        st.error(
-                                            f"Failed to update task status. Please try again. {response.status_code} : {response.text}"
-                                        )
-                                        st.toast(
-                                            "Failed to update task status. Please try again.",
-                                            icon="❌",
-                                        )
-                            with cols[3]:
-                                if st.button(
-                                    "➡️",
-                                    use_container_width=True,
-                                    key=f"move_right_{task['id']}",
-                                    disabled=i == len(board_info["columns"]) - 1,
-                                ):
-                                    response = requests.put(
-                                        "http://back:80/kanban/columns/{column_id}/tasks/{task_id}/move".format(
-                                            column_id=board_info["columns"][i + 1][
-                                                "id"
-                                            ],
-                                            task_id=task["id"],
-                                        )
-                                    )
-                                    if response.status_code == 200:
-                                        toast_for_rerun(
-                                            "Task moved right successfully!", icon="✅"
-                                        )
-                                        st.rerun()
-                                    else:
-                                        st.error(
-                                            f"Failed to move task right. Please try again. {response.status_code} : {response.text}"
-                                        )
-                                        st.toast(
-                                            "Failed to move task right. Please try again.",
-                                            icon="❌",
-                                        )
+                                        if response.status_code == 200:
+                                            toast_for_rerun(
+                                                "Task moved right successfully!", icon="✅"
+                                            )
+                                            st.rerun()
+                                        else:
+                                            st.error(
+                                                f"Failed to move task right. Please try again. {response.status_code} : {response.text}"
+                                            )
+                                            st.toast(
+                                                "Failed to move task right. Please try again.",
+                                                icon="❌",
+                                            )
 
-                        priority = next(
-                            (
-                                p
-                                for p in PRIORITY_OPTIONS
-                                if p["value"] == task["priority"]
-                            ),
-                            None,
-                        )
-                        st.markdown(
-                            f"### {priority['emoji']} **{task['title']}**"
-                            if priority
-                            else f"### **{task['title']}**"
-                        )
-                        if task["description"]:
-                            st.markdown(task["description"])
+                            priority = next(
+                                (
+                                    p
+                                    for p in PRIORITY_OPTIONS
+                                    if p["value"] == task["priority"]
+                                ),
+                                None,
+                            )
+                            st.markdown(
+                                f"### {priority['emoji']} **{task['title']}**"
+                                if priority
+                                else f"### **{task['title']}**"
+                            )
+                            if task["description"]:
+                                st.markdown(task["description"])
 
-                        if task["start_date"]:
-                            start_date = datetime.datetime.strptime(
-                                task["start_date"], "%Y-%m-%dT%H:%M:%S"
-                            )
-                            st.markdown(f"🗓️ Start: {start_date.strftime('%d-%m-%Y')}")
-                        if task["end_date"]:
-                            due_date = datetime.datetime.strptime(
-                                task["end_date"], "%Y-%m-%dT%H:%M:%S"
-                            )
-                            st.markdown(f"🗓️ Due: {due_date.strftime('%d-%m-%Y')}")
-                        if task["projects"]:
-                            task_projects = [
-                                p for p in projects if p["name"] in task["projects"]
-                            ]
-                            st.markdown(
-                                generate_aside_project_markdown(
-                                    [p["name"] for p in task_projects],
-                                    [project["color"] for project in task_projects],
-                                ),
-                                unsafe_allow_html=True,
-                            )
-                        if task["tags"]:
-                            task_tags = [t for t in tags if t["name"] in task["tags"]]
-                            st.markdown(
-                                generate_aside_tag_markdown(
-                                    [t["name"] for t in task_tags],
-                                    [tag["color"] for tag in task_tags],
-                                ),
-                                unsafe_allow_html=True,
-                            )
-                        if task["files"]:
-                            st.markdown(
-                                "📎 Attached files: {}".format(", ".join(task["files"]))
-                            )
-                        if task["calendars"]:
-                            st.markdown(
-                                "📅 Linked calendars: {}".format(
-                                    ", ".join(task["calendars"])
+                            if task["start_date"]:
+                                start_date = datetime.datetime.strptime(
+                                    task["start_date"], "%Y-%m-%dT%H:%M:%S"
                                 )
-                            )
+                                st.markdown(f"🗓️ Start: {start_date.strftime('%d-%m-%Y')}")
+                            if task["end_date"]:
+                                due_date = datetime.datetime.strptime(
+                                    task["end_date"], "%Y-%m-%dT%H:%M:%S"
+                                )
+                                st.markdown(f"🗓️ Due: {due_date.strftime('%d-%m-%Y')}")
+                            if task["projects"]:
+                                task_projects = [
+                                    p for p in projects if p["name"] in task["projects"]
+                                ]
+                                st.markdown(
+                                    generate_aside_project_markdown(
+                                        [p["name"] for p in task_projects],
+                                        [project["color"] for project in task_projects],
+                                    ),
+                                    unsafe_allow_html=True,
+                                )
+                            if task["tags"]:
+                                task_tags = [t for t in tags if t["name"] in task["tags"]]
+                                st.markdown(
+                                    generate_aside_tag_markdown(
+                                        [t["name"] for t in task_tags],
+                                        [tag["color"] for tag in task_tags],
+                                    ),
+                                    unsafe_allow_html=True,
+                                )
+                            if task["files"]:
+                                st.markdown(
+                                    "📎 Attached files: {}".format(", ".join(task["files"]))
+                                )
+                            if task["calendars"]:
+                                st.markdown(
+                                    "📅 Linked calendars: {}".format(
+                                        ", ".join(task["calendars"])
+                                    )
+                                )
 
-        # MARK: ADD NEW COLUMN
-        if show_edit_columns:
-            with columns[-1]:
-                st.markdown("### Add a new column")
-                cols = st.columns([4, 1])
-                new_column_name = cols[0].text_input(
-                    "Name", placeholder="Enter the name of the new column"
-                )
-                new_column_color = cols[1].color_picker("Color", value="#FFFFFF")
-                if st.button("Add Column", use_container_width=True):
-                    if not new_column_name:
-                        st.error("Column name cannot be empty.")
-                        return
-
-                    response = requests.post(
-                        "http://back:80/kanban/boards/{}/columns".format(
-                            selected_board["id"]
-                        ),
-                        json={
-                            "name": new_column_name,
-                            "color": new_column_color,
-                            "position": len(board_info["columns"]),
-                        },
+            # MARK: ADD NEW COLUMN
+            if show_edit_columns:
+                with columns[-1]:
+                    st.markdown("### Add a new column")
+                    cols = st.columns([4, 1])
+                    new_column_name = cols[0].text_input(
+                        "Name", placeholder="Enter the name of the new column"
                     )
+                    new_column_color = cols[1].color_picker("Color", value="#FFFFFF")
+                    if st.button("Add Column", use_container_width=True):
+                        if not new_column_name:
+                            st.error("Column name cannot be empty.")
+                            return
 
-                    if response.status_code == 200:
-                        toast_for_rerun("Column added successfully!", icon="✅")
-                        st.rerun()
-                    else:
-                        st.error(
-                            f"Failed to add column. Please try again. {response.status_code} : {response.text}"
+                        response = requests.post(
+                            "http://back:80/kanban/boards/{}/columns".format(
+                                selected_board["id"]
+                            ),
+                            json={
+                                "name": new_column_name,
+                                "color": new_column_color,
+                                "position": len(board_info["columns"]),
+                            },
                         )
-                        st.toast("Failed to add column. Please try again.", icon="❌")
+
+                        if response.status_code == 200:
+                            toast_for_rerun("Column added successfully!", icon="✅")
+                            st.rerun()
+                        else:
+                            st.error(
+                                f"Failed to add column. Please try again. {response.status_code} : {response.text}"
+                            )
+                            st.toast("Failed to add column. Please try again.", icon="❌")
 
 
 if __name__ == "__main__":

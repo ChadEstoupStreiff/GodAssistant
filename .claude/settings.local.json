@@ -2,7 +2,21 @@
   "permissions": {
     "allow": [
       "Bash(Get-ChildItem -Path . -Force)",
-      "Bash(Select-Object Name, Mode)"
+      "Bash(Select-Object Name, Mode)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Chad\\\\GodAssistant\" -Depth 2)",
+      "Bash(Select-Object FullName, PSIsContainer)",
+      "Bash(Sort-Object FullName)",
+      "WebFetch(domain:docs.mistral.ai)",
+      "WebFetch(domain:platform.openai.com)",
+      "WebFetch(domain:ai.google.dev)",
+      "WebFetch(domain:console.groq.com)",
+      "WebSearch",
+      "WebFetch(domain:groq.com)",
+      "WebFetch(domain:developers.openai.com)",
+      "WebFetch(domain:community.groq.com)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }

@@ -268,11 +268,8 @@ def dialog_message_presets():
 
 def clear_chat():
     # MARK: Clear
-    del st.session_state.chat_session
-    del st.session_state.chat_infos
-    del st.session_state.chat_files
-    del st.session_state.chat_calendars
-    del st.session_state.chat_messages
+    for key in ["chat_session", "chat_infos", "chat_files", "chat_calendars", "chat_messages"]:
+        st.session_state.pop(key, None)
 
 
 def load_chat_session(session_id, silent: bool = False):
@@ -334,19 +331,20 @@ def is_chat_running(session_id):
 def stream_thinking(session_id):
     data = ""
     while True:
-        time.sleep(
-            0.2 if len(data) == 0 else 0.05
-        )  # Adjust sleep time for smoother streaming
+        time.sleep(0.2 if len(data) == 0 else 0.05)
         running_info = is_chat_running(session_id)
+
+        if not running_info:
+            break
 
         if running_info.get("state") == "not_running":
             load_chat_session(session_id, silent=True)
 
         part_data = running_info.get("answer", "")
         if part_data != data:
-            part_data = part_data[len(data) :]
-            data += part_data
-            yield part_data
+            new_chunk = part_data[len(data):]
+            data += new_chunk
+            yield new_chunk
 
 
 def send_message(prompt):
@@ -373,19 +371,16 @@ def chat():
             if st.button("🆕 New Chat", use_container_width=True):
                 dialog_new_chat()
 
-            with st.spinner("Loading chat sessions..."):
-                # Fetch chat sessions from the backend
-                try:
-                    chats = requests.get("http://back:80/chat/list").json()
-                except requests.RequestException as e:
-                    st.error(f"Error fetching chat sessions: {e}")
-                    return
+            try:
+                chats = requests.get("http://back:80/chat/list").json()
+            except requests.RequestException as e:
+                st.error(f"Error fetching chat sessions: {e}")
+                return
 
-            chats = requests.get("http://back:80/chat/list").json()
             selected_session = st.selectbox(
                 "Select a session",
-                [chat for chat in chats],
-                format_func=lambda chat: chat["title"],
+                chats,
+                format_func=lambda chat: f"{chat['title']} ({chat['date'][:10]})",
                 on_change=clear_chat,
             )
 
@@ -494,7 +489,7 @@ def chat():
                 )
 
         # MARK: Chat
-        for message in st.session_state.chat_messages:
+        for msg_idx, message in enumerate(st.session_state.chat_messages):
             user = message["user"]
             date = message["date"].replace("T", " ").replace("Z", "")
             content = message["content"]
@@ -502,8 +497,14 @@ def chat():
             calendars = json.loads(message["calendar"]) if message["calendar"] else []
 
             with st.chat_message("assistant" if user != "user" else "user"):
-                st.caption(f"**{user if user != 'user' else 'You'}** - {date}")
-                if user == "user":
+                if user != "user":
+                    caption_cols = st.columns([10, 1])
+                    caption_cols[0].caption(f"**{user}** - {date}")
+                    with caption_cols[1]:
+                        with st.popover("📋", help="Copy response"):
+                            st.code(content, language=None)
+                else:
+                    st.caption(f"**You** - {date}")
                     if len(files) > 0:
                         st.markdown(
                             generate_badges_html(
@@ -511,8 +512,6 @@ def chat():
                             ),
                             unsafe_allow_html=True,
                         )
-                    else:
-                        st.caption("No files attached.")
                     if len(calendars) > 0:
                         st.markdown(
                             generate_badges_html(
@@ -525,16 +524,15 @@ def chat():
                             ),
                             unsafe_allow_html=True,
                         )
-                    else:
-                        st.caption("No calendar events attached.")
-
                     if len(files) > 0 or len(calendars) > 0:
                         spacer(15)
                 st.markdown(content)
 
-        if is_chat_running(st.session_state.chat_session).get("state") != "not_running":
+        chat_run_state = is_chat_running(st.session_state.chat_session)
+        if chat_run_state and chat_run_state.get("state") != "not_running":
             with st.chat_message("assistant"):
-                with st.spinner("Thinking...", show_time=True):
+                spinner_text = "Queued..." if chat_run_state.get("state") == "queued" else "Thinking..."
+                with st.spinner(spinner_text, show_time=True):
                     st.write_stream(stream_thinking(st.session_state.chat_session))
 
         prompt = st.chat_input(
