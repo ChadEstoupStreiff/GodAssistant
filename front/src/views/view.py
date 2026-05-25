@@ -219,6 +219,161 @@ def dialog_edit_file(file: str, projects: List[str], tags: List[str]):
                     )
 
 
+# MARK: AUTO LINK
+@st.dialog("🤖 Auto Link", width="large")
+def dialog_auto_link(file):
+    st.caption(
+        "Select files to analyze, then let the AI find semantic links between them and the current file."
+    )
+
+    with st.expander("Search Files to Analyze", expanded=True):
+        result = file_search_engine(nbr_columns=3)
+        if result is not None:
+            st.session_state.auto_link_search_files = result["files"]
+
+    selected_files = []
+    if "auto_link_search_files" in st.session_state:
+        representation_mode, show_preview, nbr_of_files_per_line = (
+            representation_mode_select(
+                default_mode=get_setting("link_files_default_representation_mode")
+            )
+        )
+        selected_files = display_files(
+            st.session_state.auto_link_search_files,
+            representation_mode=representation_mode,
+            show_preview=show_preview,
+            nbr_of_files_per_line=nbr_of_files_per_line,
+            multi_select_mode=1,
+            allow_actions=False,
+            key="auto_link_search_files_selection",
+        )
+
+    target_files = [f for f in (selected_files or []) if f != file]
+    if st.button(
+        "🔍 Find Links with AI",
+        disabled=not target_files,
+        use_container_width=True,
+        help="Send the selected files to the AI to find semantic links with the current file.",
+    ):
+        with st.spinner("AI is analyzing the files..."):
+            result = requests.post(
+                "http://back:80/links/auto-find",
+                json={"source_file": file, "target_files": target_files},
+            )
+        if result.status_code == 200:
+            st.session_state.auto_link_suggestions = result.json()
+        else:
+            st.error(f"AI error: {result.text}")
+
+    force_threshold = st.number_input(
+        "Minimum Force Threshold",
+        min_value=0.1,
+        max_value=3.0,
+        value=0.5,
+        step=0.1,
+        help="Links with a force below this threshold will be unchecked by default.",
+    )
+    suggestions = st.session_state.get("auto_link_suggestions", [])
+    if suggestions:
+        st.divider()
+        st.markdown(f"**{len(suggestions)} link(s) found** — review and edit before adding:")
+        edited = []
+        for i, link in enumerate(suggestions):
+            with st.container(border=True):
+                cols = st.columns([5, 2, 1])
+                with cols[0]:
+                    target_name = link["fileB"].split("/")[-1]
+                    st.markdown(f"🔗 **{target_name}**")
+                    comment = st.text_input(
+                        "Comment",
+                        value=link.get("comment", ""),
+                        key=f"auto_link_comment_{i}",
+                        label_visibility="collapsed",
+                        placeholder="Link comment...",
+                    )
+                with cols[1]:
+                    force = st.number_input(
+                        "Force",
+                        min_value=0.0,
+                        value=float(link.get("force", 1.0)),
+                        step=0.1,
+                        key=f"auto_link_force_{i}",
+                    )
+                with cols[2]:
+                    selected = st.checkbox(
+                        "✓",
+                        value=float(link.get("force", 1.0)) >= force_threshold,
+                        key=f"auto_link_select_{i}",
+                        help="Select this link to add it.",
+                    )
+                edited.append(
+                    {
+                        "fileA": link["fileA"],
+                        "fileB": link["fileB"],
+                        "force": force,
+                        "comment": comment,
+                        "selected": selected,
+                    }
+                )
+
+        selected_links = [e for e in edited if e["selected"]]
+        btn_cols = st.columns(2)
+        with btn_cols[0]:
+            if st.button(
+                "➕ Add Selected",
+                disabled=not selected_links,
+                use_container_width=True,
+                help="Add selected links without removing existing ones.",
+            ):
+                for link in selected_links:
+                    requests.post(
+                        "http://back:80/links/add",
+                        params={
+                            "fileA": link["fileA"],
+                            "fileB": link["fileB"],
+                            "force": link["force"],
+                            "comment": link["comment"],
+                        },
+                    )
+                del st.session_state.auto_link_suggestions
+                if "auto_link_search_files" in st.session_state:
+                    del st.session_state.auto_link_search_files
+                toast_for_rerun(f"Added {len(selected_links)} link(s).", icon="✅")
+                st.rerun()
+        with btn_cols[1]:
+            if st.button(
+                "🔄 Overwrite Links",
+                disabled=not selected_links,
+                use_container_width=True,
+                help="Remove all existing links for the current file, then add selected ones.",
+            ):
+                existing = requests.get(f"http://back:80/links/list/{file}")
+                if existing.status_code == 200 and existing.json():
+                    for old_link in existing.json():
+                        requests.delete(
+                            f"http://back:80/links/remove?fileA={file}&fileB={old_link[0]}"
+                        )
+                for link in selected_links:
+                    requests.post(
+                        "http://back:80/links/add",
+                        params={
+                            "fileA": link["fileA"],
+                            "fileB": link["fileB"],
+                            "force": link["force"],
+                            "comment": link["comment"],
+                        },
+                    )
+                del st.session_state.auto_link_suggestions
+                if "auto_link_search_files" in st.session_state:
+                    del st.session_state.auto_link_search_files
+                toast_for_rerun(
+                    f"Links overwritten with {len(selected_links)} new link(s).", icon="🔄"
+                )
+                st.rerun()
+    elif "auto_link_suggestions" in st.session_state:
+        st.info("No semantic links found between the selected files.")
+
+
 # MARK: ADD LINK
 @st.dialog("🔗 Add Link", width="large")
 def dialog_add_link(file):
@@ -447,12 +602,23 @@ def see_file(file):
 
     # MARK: LINKS
     with tab_links:
-        if st.button(
-            "🔗 Add Link",
-            use_container_width=True,
-            help="Click to add a link to another file.",
-        ):
-            dialog_add_link(file)
+        cols = st.columns(2)
+        with cols[0]:
+            if st.button(
+                "🤖 Auto Link",
+                use_container_width=True,
+                help="Let the AI find semantic links between files.",
+            ):
+                if "auto_link_suggestions" in st.session_state:
+                    del st.session_state.auto_link_suggestions
+                dialog_auto_link(file)
+        with cols[1]:
+            if st.button(
+                "🔗 Add Link",
+                use_container_width=True,
+                help="Click to add a link to another file.",
+            ):
+                dialog_add_link(file)
 
         result = requests.get(f"http://back:80/links/list/{file}")
         if result.status_code == 200 and result.json() is not None:

@@ -31,6 +31,8 @@ default_settings = {
     "refractor_type": "llama",
     "refractor_model": "llama3.2:1b",
     "auto_display_file_size_limit": 10,  # 10Mb
+    "link_type": "llama",
+    "link_model": "llama3.2:1b",
     "mistral_api_key": "",
     "openai_api_key": "",
     "gemini_api_key": "",

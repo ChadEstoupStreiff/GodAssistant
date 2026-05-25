@@ -756,6 +756,9 @@ def display_files(
             key=key,
         )
 
+    if multi_select_mode is True or multi_select_mode is None:
+        st.caption(f"Selected files: {len(selected_files)} / {len(files)}")
+
     return selected_files
 
 

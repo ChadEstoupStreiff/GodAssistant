@@ -447,6 +447,16 @@ def settings():
                     key="refractor",
                 )
 
+            with st.expander("Link Settings", expanded=True):
+                st.caption(
+                    "AI model used by the 'Add auto link' feature to find semantic links between files."
+                )
+                settings["link_type"], settings["link_model"] = chose_ai_menu(
+                    settings.get("link_type", "llama"),
+                    settings.get("link_model", "llama3.2:1b"),
+                    key="link",
+                )
+
         with cols[1]:
             with st.expander("Summarization Settings", expanded=True):
                 settings["enable_auto_summary"] = st.toggle(
@@ -735,8 +745,11 @@ def settings():
                             st.warning("Please enter a model name to pull.")
             with cols[1]:
                 st.subheader("Installed Models:")
-                for model in installed_models:
-                    st.badge(model)
+                if installed_models:
+                    for model in installed_models:
+                        st.badge(model)
+                else:
+                    st.warning("Ollama is not available.")
 
         with tab_mistral:
             st.image(
