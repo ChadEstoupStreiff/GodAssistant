@@ -308,11 +308,11 @@ def chose_ai_menu(default_ai_type: str, default_model: str, key: str = "ai_menu"
         chatgpt_models = [
             "gpt-4.1-nano",
             "gpt-4.1-mini",
+            "gpt-4o-mini",
             "gpt-3.5-turbo",
             "gpt-4.1",
             "gpt-4o",
             "gpt-4",
-            "gpt-4.5-preview",
         ]
         model = st.selectbox(
             "ChatGPT Model",
@@ -326,8 +326,6 @@ def chose_ai_menu(default_ai_type: str, default_model: str, key: str = "ai_menu"
 
     elif ai_type == "Gemini":
         gemini_models = [
-            "gemini-1.5-flash",
-            "gemini-1.5-pro",
             "gemini-2.0-flash-lite",
             "gemini-2.0-flash",
             "gemini-2.5-flash-lite",
@@ -344,6 +342,122 @@ def chose_ai_menu(default_ai_type: str, default_model: str, key: str = "ai_menu"
             help="Select the Google Gemini model to use.",
         )
     return ai_type, model
+
+
+def chose_vision_ai_menu(default_type: str, default_model: str, key: str, local_label: str = "Local", local_key: str = "local"):
+    import requests
+    import streamlit as st
+
+    type_options = [local_key, "llama", "Mistral", "ChatGPT", "Gemini"]
+    type_labels = [local_label, "Local Llama (Ollama)", "Mistral", "ChatGPT", "Gemini"]
+    resolved_default = default_type if default_type in type_options else local_key
+    ai_type = st.radio(
+        "Provider",
+        type_options,
+        format_func=lambda x: type_labels[type_options.index(x)],
+        index=type_options.index(resolved_default),
+        horizontal=True,
+        key=f"{key}_type",
+    )
+
+    model = default_model
+    if ai_type == local_key:
+        st.caption(f"Using the built-in {local_label} engine.")
+    elif ai_type == "llama":
+        result = requests.get("http://back:80/ollama/list")
+        installed_models = (
+            [m["name"] for m in result.json()] if result.status_code == 200 else []
+        )
+        vision_models = [m for m in installed_models if any(
+            tag in m for tag in ["llava", "moondream", "bakllava", "minicpm", "vision"]
+        )] or installed_models
+        if not vision_models:
+            st.error("No vision-capable LLaMA models found. Pull a vision model (e.g. llava:7b).")
+        model = st.selectbox(
+            "LLaMA Vision Model",
+            options=vision_models,
+            index=vision_models.index(default_model) if default_model in vision_models else 0,
+            key=f"{key}_model",
+            help="Select a vision-capable Ollama model (e.g. llava:7b).",
+        )
+    elif ai_type == "Mistral":
+        pixtral_models = ["pixtral-12b-2409", "pixtral-large-2411"]
+        model = st.selectbox(
+            "Mistral Vision Model",
+            options=pixtral_models,
+            index=pixtral_models.index(default_model) if default_model in pixtral_models else 0,
+            key=f"{key}_model",
+        )
+    elif ai_type == "ChatGPT":
+        gpt_vision_models = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4.1"]
+        model = st.selectbox(
+            "OpenAI Vision Model",
+            options=gpt_vision_models,
+            index=gpt_vision_models.index(default_model) if default_model in gpt_vision_models else 0,
+            key=f"{key}_model",
+        )
+    elif ai_type == "Gemini":
+        gemini_vision_models = [
+            "gemini-2.0-flash",
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
+        ]
+        model = st.selectbox(
+            "Gemini Vision Model",
+            options=gemini_vision_models,
+            index=gemini_vision_models.index(default_model) if default_model in gemini_vision_models else 0,
+            key=f"{key}_model",
+        )
+    return ai_type, model
+
+
+def chose_transcription_menu(default_type: str, default_model: str, key: str):
+    import streamlit as st
+
+    type_options = ["local", "openai", "groq"]
+    type_labels = ["Local (faster-whisper)", "OpenAI Whisper API", "Groq Whisper API"]
+    transcription_type = st.radio(
+        "Provider",
+        type_options,
+        format_func=lambda x: type_labels[type_options.index(x)],
+        index=type_options.index(default_type) if default_type in type_options else 0,
+        horizontal=True,
+        key=f"{key}_type",
+    )
+
+    model = default_model
+    if transcription_type == "local":
+        local_models = ["tiny", "base", "small", "medium", "large-v3"]
+        model = st.radio(
+            "Whisper model",
+            options=local_models,
+            index=local_models.index(default_model) if default_model in local_models else 2,
+            horizontal=True,
+            key=f"{key}_model",
+        )
+        st.markdown("""
+| Model    | Speed   | RAM     | WER (English) |
+|----------|---------|---------|---------------|
+| tiny     | Fastest | ~1–2 GB | ~14–15%       |
+| base     | Fast    | ~2–3 GB | ~10–11%       |
+| small    | Fast    | ~4–5 GB | ~6–7%         |
+| medium   | Slower  | ~7–8 GB | ~4–5%         |
+| large-v3 | Slowest | ~10–12 GB | ~2.7%       |
+""")
+    elif transcription_type == "openai":
+        st.caption("Uses OpenAI's Whisper API. Requires an OpenAI API key in LLM Settings.")
+        model = "whisper-1"
+        st.info("Model: whisper-1 (only available model on OpenAI Whisper API)")
+    elif transcription_type == "groq":
+        st.caption("Uses Groq's ultra-fast Whisper API. Requires a Groq API key in LLM Settings.")
+        groq_models = ["whisper-large-v3", "whisper-large-v3-turbo"]
+        model = st.selectbox(
+            "Groq Whisper Model",
+            options=groq_models,
+            index=groq_models.index(default_model) if default_model in groq_models else 0,
+            key=f"{key}_model",
+        )
+    return transcription_type, model
 
 
 def settings():
@@ -481,6 +595,21 @@ def settings():
                     value=settings["enable_auto_ocr"],
                     help="Enable automatic OCR & BLIP processing of image files when uploaded.",
                 )
+                st.markdown("**Image Caption (BLIP)**")
+                settings["blip_type"], settings["blip_model"] = chose_vision_ai_menu(
+                    settings.get("blip_type", "local"),
+                    settings.get("blip_model", "llava:7b"),
+                    key="blip",
+                    local_label="Local BLIP",
+                )
+                st.markdown("**Text Extraction (OCR)**")
+                settings["ocr_type"], settings["ocr_model"] = chose_vision_ai_menu(
+                    settings.get("ocr_type", "paddle"),
+                    settings.get("ocr_model", "llava:7b"),
+                    key="ocr",
+                    local_label="Local PaddleOCR",
+                    local_key="paddle",
+                )
 
             with st.expander("Transcription Settings", expanded=True):
                 st.caption(
@@ -491,24 +620,10 @@ def settings():
                     value=settings["enable_auto_transcription"],
                     help="Enable automatic transcription of audio files when uploaded.",
                 )
-                transcription_models = ["tiny", "base", "small", "medium", "large-v3"]
-                settings["transcription_model"] = st.radio(
-                    "Transcription model",
-                    options=transcription_models,
-                    index=transcription_models.index(settings["transcription_model"]),
-                    horizontal=True,
-                )
-                st.markdown("""
-| Model       | Speed     | RAM Needed        | WER (English) |
-|-------------|-----------|-------------------|---------------|
-| tiny        | Fastest   | ~1–2 GB           | ~14–15%       |
-| base        | Very fast | ~2–3 GB           | ~10–11%       |
-| small       | Fast      | ~4–5 GB           | ~6–7%         |
-| medium      | Slower    | ~7–8 GB           | ~4–5%         |
-| large-v3    | Slowest   | ~10–12 GB         | ~2.7%         |
-""")
-                st.caption(
-                    "Note: The higher the model, the more accurate the transcription, but it requires more resources, make sure you have enough RAM."
+                settings["transcription_type"], settings["transcription_model"] = chose_transcription_menu(
+                    settings.get("transcription_type", "local"),
+                    settings.get("transcription_model", "small"),
+                    key="transcription",
                 )
 
         if settings != loaded_settings:
@@ -593,8 +708,8 @@ def settings():
 
     # MARK: LLM Settings
     with settings_tabs[3]:
-        tab_llama, tab_mistral, tab_chatgpt, tab_gemini = st.tabs(
-            ["Local Llama", "Mistral", "OpenAI ChatGPT", "Google Gemini"]
+        tab_llama, tab_mistral, tab_chatgpt, tab_gemini, tab_groq = st.tabs(
+            ["Local Llama", "Mistral", "OpenAI ChatGPT", "Google Gemini", "Groq"]
         )
 
         spacer()
@@ -619,20 +734,18 @@ def settings():
 | mistral-large-latest     | Mistral   | Solves complex tasks with high quality, 128k token context         | **\$2.00 / \$6.00**                |
 | magistral-small-latest   | Mistral   | Multilingual reasoning model, 40k token context                   | **\$0.50 / \$1.50**                |
 | magistral-medium-latest  | Mistral   | High-end multilingual reasoning, 128k token context                | **\$2.00 / \$5.00**                |
-| gemini-1.5-flash      | Gemini    | Fast inference with 1M context, great for interactive tasks                 | **\$0.075–0.15 / \$0.30–0.60**   |
 | gemini-2.0-flash-lite | Gemini    | Smallest Gemini 2.0 for scalable usage with low latency                      | **\$0.075 / \$0.30**             |
 | gemini-2.0-flash      | Gemini    | Balanced multimodal support (text/image/video/audio)                        | **\$0.10 / \$0.40**              |
 | gemini-2.5-flash-lite | Gemini    | Lightweight 2.5 model, tuned for efficiency                                 | **\$0.10 / \$0.40**              |
 | gemini-2.5-flash      | Gemini    | Hybrid reasoning model for speed and broad media support                    | **\$0.30 / \$2.50**              |
-| gemini-1.5-pro        | Gemini    | Complex reasoning, 2M token context, strong at coding and data analysis     | **\$1.25–2.50 / \$5.00–10.00**   |
 | gemini-2.5-pro        | Gemini    | Premium model for advanced reasoning, coding, and analysis                  | **\$1.25–2.50 / \$10.00–15.00**  |
 | gpt-4.1-nano          | ChatGPT   | Ultra-light model for micro-tasks                                           | **\$0.10 / \$0.40**              |
 | gpt-4.1-mini          | ChatGPT   | Efficient model with faster latency and reduced cost                        | **\$0.40 / \$1.60**              |
+| gpt-4o-mini           | ChatGPT   | Fast and affordable multimodal model                                        | **\$0.15 / \$0.60**              |
 | gpt-3.5-turbo         | ChatGPT   | Fast, general-purpose model for basic conversation and summarization        | **\$1.00 / \$2.00**              |
 | gpt-4.1               | ChatGPT   | Stronger reasoning, faster than GPT-4, versatile                            | **\$2.00 / \$8.00**              |
 | gpt-4o                | ChatGPT   | Top-tier multimodal model (text, image, audio), fast with high accuracy     | **\$2.50 / \$10.00**             |
-| gpt-4                | ChatGPT   | High-quality reasoning and understanding, best for difficult tasks          | **\$30.00 / \$60.00**            |
-| gpt-4.5-preview       | ChatGPT   | Experimental cutting-edge model, very high performance and cost             | **\$75.00 / \$150.00**           |""")
+| gpt-4                | ChatGPT   | High-quality reasoning and understanding, best for difficult tasks          | **\$30.00 / \$60.00**            |""")
 
         elif sort_type == "Capabilities":
             st.markdown("""| Model                 | Type      | Capabilities                                                                 | Input/Output **\$ per 1M tokens** |
@@ -643,10 +756,10 @@ def settings():
 | gemini-2.0-flash-lite | Gemini    | Smallest Gemini 2.0 for scalable usage with low latency                      | **\$0.075 / \$0.30**             |
 | gemini-2.5-flash-lite | Gemini    | Lightweight 2.5 model, tuned for efficiency                                 | **\$0.10 / \$0.40**              |
 | gpt-4.1-mini          | ChatGPT   | Efficient model with faster latency and reduced cost                        | **\$0.40 / \$1.60**              |
+| gpt-4o-mini           | ChatGPT   | Fast and affordable multimodal model                                        | **\$0.15 / \$0.60**              |
 | ministral-8b-latest   | Mistral   | Powerful model for on-device use cases, 128k token context                  | **\$0.10 / \$1.00**              |
 | gemini-2.0-flash      | Gemini    | Balanced multimodal support (text/image/video/audio)                        | **\$0.10 / \$0.40**              |
 | llama3.2:8b           | LLaMA     | Balanced open model for standard use cases                                  | **Free**                         |
-| gemini-1.5-flash      | Gemini    | Fast inference with 1M context, great for interactive tasks                 | **\$0.075–0.15 / \$0.30–0.60**   |
 | gpt-3.5-turbo         | ChatGPT   | Fast, general-purpose model for basic conversation and summarization        | **\$1.00 / \$2.00**              |
 | gpt-4                | ChatGPT   | High-quality reasoning and understanding, best for difficult tasks          | **\$30.00 / \$60.00**            |
 | llama3.2:70b          | LLaMA     | High-quality open-source model with good reasoning                          | **Free**                         |
@@ -656,10 +769,9 @@ def settings():
 | magistral-small-latest | Mistral   | Multilingual reasoning model, 40k token context                             | **\$0.50 / \$1.50**              |
 | mistral-small-latest  | Mistral   | Multilingual and multimodal Apache 2.0 model, 32k token context             | **\$0.10 / \$0.30**              |
 | mistral-large-latest  | Mistral   | Solves complex tasks with high quality, 128k token context                  | **\$2.00 / \$6.00**              |
-| gemini-1.5-pro        | Gemini    | Complex reasoning, 2M token context, strong at coding and data analysis     | **\$1.25–2.50 / \$5.00–10.00**   |
 | mistral-medium-latest | Mistral   | Cost-efficient enterprise-level performance, 128k token context             | **\$0.40 / \$2.00**              |
 | ministral-3b-latest   | Mistral   | Most efficient edge model, 128k token context                               | **\$0.04 / \$0.04**              |
-| gpt-4.5-preview       | ChatGPT   | Experimental cutting-edge model, very high performance and cost             | **\$75.00 / \$150.00**           |""")
+| gpt-4o                | ChatGPT   | Top-tier multimodal model (text, image, audio), fast with high accuracy     | **\$2.50 / \$10.00**             |""")
 
         elif sort_type == "Pricing":
             st.markdown("""| Model                 | Type      | Capabilities                                                                 | Input/Output **\$ per 1M tokens** |
@@ -669,24 +781,23 @@ def settings():
 | llama3.2:70b          | LLaMA     | High-quality open-source model with good reasoning                          | **Free**                         |
 | ministral-3b-latest   | Mistral   | Most efficient edge model, 128k token context                               | **\$0.04 / \$0.04**              |
 | gemini-2.0-flash-lite | Gemini    | Smallest Gemini 2.0 for scalable usage with low latency                      | **\$0.075 / \$0.30**             |
-| gemini-1.5-flash      | Gemini    | Fast inference with 1M context, great for interactive tasks                 | **\$0.075–0.15 / \$0.30–0.60**   |
 | gemini-2.0-flash      | Gemini    | Balanced multimodal support (text/image/video/audio)                        | **\$0.10 / \$0.40**              |
 | gemini-2.5-flash-lite | Gemini    | Lightweight 2.5 model, tuned for efficiency                                 | **\$0.10 / \$0.40**              |
 | mistral-small-latest  | Mistral   | Multilingual and multimodal Apache 2.0 model, 32k token context             | **\$0.10 / \$0.30**              |
 | ministral-8b-latest   | Mistral   | Powerful model for on-device use cases, 128k token context                  | **\$0.10 / \$1.00**              |
 | gpt-4.1-nano          | ChatGPT   | Ultra-light model for micro-tasks                                           | **\$0.10 / \$0.40**              |
+| gpt-4o-mini           | ChatGPT   | Fast and affordable multimodal model                                        | **\$0.15 / \$0.60**              |
 | gpt-4.1-mini          | ChatGPT   | Efficient model with faster latency and reduced cost                        | **\$0.40 / \$1.60**              |
 | mistral-medium-latest | Mistral   | Cost-efficient enterprise-level performance, 128k token context             | **\$0.40 / \$2.00**              |
 | magistral-small-latest| Mistral   | Multilingual reasoning model, 40k token context                             | **\$0.50 / \$1.50**              |
 | gpt-3.5-turbo         | ChatGPT   | Fast, general-purpose model for basic conversation and summarization        | **\$1.00 / \$2.00**              |
-| gemini-1.5-pro        | Gemini    | Complex reasoning, 2M token context, strong at coding and data analysis     | **\$1.25–2.50 / \$5.00–10.00**   |
 | gemini-2.5-pro        | Gemini    | Premium model for advanced reasoning, coding, and analysis                  | **\$1.25–2.50 / \$10.00–15.00**  |
 | magistral-medium-latest| Mistral  | High-end multilingual reasoning, 128k token context                         | **\$2.00 / \$5.00**              |
 | mistral-large-latest  | Mistral   | Solves complex tasks with high quality, 128k token context                  | **\$2.00 / \$6.00**              |
 | gpt-4.1               | ChatGPT   | Stronger reasoning, faster than GPT-4, versatile                            | **\$2.00 / \$8.00**              |
+| gemini-2.5-flash      | Gemini    | Hybrid reasoning model for speed and broad media support                    | **\$0.30 / \$2.50**              |
 | gpt-4o                | ChatGPT   | Top-tier multimodal model (text, image, audio), fast with high accuracy     | **\$2.50 / \$10.00**             |
-| gpt-4                | ChatGPT   | High-quality reasoning and understanding, best for difficult tasks          | **\$30.00 / \$60.00**            |
-| gpt-4.5-preview       | ChatGPT   | Experimental cutting-edge model, very high performance and cost             | **\$75.00 / \$150.00**           |""")
+| gpt-4                | ChatGPT   | High-quality reasoning and understanding, best for difficult tasks          | **\$30.00 / \$60.00**            |""")
 
         with tab_llama:
             st.image(
@@ -810,6 +921,41 @@ def settings():
             if new_gemini_api_key != gemini_api_key:
                 settings["gemini_api_key"] = new_gemini_api_key
                 apply_settings(settings)
+
+        with tab_groq:
+            st.image("https://cdn.sanity.io/images/chol0sk5/production/ce0b2266373b3c9722b0bccb9a98441c26c89696-1200x630.png", width=300)
+            st.text(
+                "Groq provides ultra-fast inference for Whisper transcription models. Ideal for fast and accurate audio transcription."
+            )
+            groq_api_key = settings.get("groq_api_key", "")
+            new_groq_api_key = st.text_input(
+                "Groq API Key",
+                value=groq_api_key,
+                type="password",
+                help="Enter your Groq API key to use Groq transcription models.",
+                key="groq_api_key",
+            )
+            if new_groq_api_key != groq_api_key:
+                settings["groq_api_key"] = new_groq_api_key
+                apply_settings(settings)
+
+        if len(groq_api_key) > 0:
+            with tab_groq:
+                with st.spinner("Checking Groq key...", show_time=True):
+                    try:
+                        headers = {"Authorization": f"Bearer {groq_api_key}"}
+                        response = requests.get(
+                            "https://api.groq.com/openai/v1/models",
+                            headers=headers,
+                            timeout=10,
+                        )
+                        if response.status_code == 200:
+                            st.success("Groq API key is valid.", icon="✅")
+                        else:
+                            st.error("Groq API key is invalid.", icon="❌")
+                            st.toast("Groq API key is invalid.", icon="❌")
+                    except requests.RequestException as e:
+                        st.toast(f"Groq check failed: {e}", icon="⚠️")
 
         if len(mistral_api_key) > 0:
             with tab_mistral:

@@ -25,7 +25,8 @@ from db.models import (
     TaskCalendar,
     KanbanBoard,
     KanbanColumn,
-    KanbanColumnTask
+    KanbanColumnTask,
+    Link
 )
 
 

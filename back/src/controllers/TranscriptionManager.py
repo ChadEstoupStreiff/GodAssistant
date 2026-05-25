@@ -7,6 +7,8 @@ from datetime import datetime
 
 from db import TaskStateEnum, Transcription, TranscriptionTask, get_db
 from sqlalchemy import and_
+from tools.ai import request_transcription
+from views.settings import get_setting
 
 
 class TranscriptionManager:
@@ -55,16 +57,22 @@ class TranscriptionManager:
                 db.commit()
 
                 logging.info(f"TRANSCRIPTION >> Processing file: {file}")
-                proc = subprocess.run(
-                    ["python3", "/app/whisper.py", "small", file],
-                    capture_output=True,
-                    text=True,
-                )
-                if proc.returncode != 0:
-                    raise RuntimeError(
-                        f"Subprocess failed with code {proc.returncode}: {proc.stderr.strip()}"
+                transcription_type = get_setting("transcription_type", "local")
+                model = get_setting("transcription_model", "small")
+
+                if transcription_type == "local":
+                    proc = subprocess.run(
+                        ["python3", "/app/whisper.py", model, file],
+                        capture_output=True,
+                        text=True,
                     )
-                result = proc.stdout.strip()
+                    if proc.returncode != 0:
+                        raise RuntimeError(
+                            f"Subprocess failed with code {proc.returncode}: {proc.stderr.strip()}"
+                        )
+                    result = proc.stdout.strip()
+                else:
+                    _, _, result = request_transcription("transcription", file)
                 logging.info(f"TRANSCRIPTION >> Result for file {file}: {result}")
 
                 task.state = TaskStateEnum.COMPLETED

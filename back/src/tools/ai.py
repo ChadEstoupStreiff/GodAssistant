@@ -1,4 +1,6 @@
+import base64
 import json
+import mimetypes
 import re
 from typing import Set
 
@@ -185,3 +187,150 @@ def request_llm(
 
     else:
         raise ValueError(f"Unsupported AI type: {ai_type}")
+
+
+def request_vision_llm(
+    setting_prefix: str,
+    prompt: str,
+    image_path: str,
+) -> Set[str]:
+    """
+    Request a vision-capable LLM to analyze an image.
+    Returns a tuple of (AI type, model, response).
+    """
+    ai_type = get_setting(f"{setting_prefix}_type")
+    model = get_setting(f"{setting_prefix}_model")
+
+    with open(image_path, "rb") as f:
+        image_data = base64.b64encode(f.read()).decode("utf-8")
+    mime_type = mimetypes.guess_type(image_path)[0] or "image/jpeg"
+
+    if ai_type == "llama":
+        ollama_server = get_setting("ollama_server", "http://ollama:11434")
+        response = requests.post(
+            f"{ollama_server}/api/generate",
+            json={
+                "model": model,
+                "prompt": prompt,
+                "images": [image_data],
+                "stream": False,
+            },
+            timeout=3600,
+        )
+        if response.status_code != 200:
+            raise Exception(f"Ollama vision error {response.status_code}: {response.text}")
+        return ai_type, model, response.json()["response"]
+
+    elif ai_type == "Mistral":
+        api_key = get_setting("mistral_api_key")
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": model,
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": f"data:{mime_type};base64,{image_data}"},
+                ],
+            }],
+        }
+        response = requests.post(
+            "https://api.mistral.ai/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=3600,
+        )
+        if response.status_code != 200:
+            raise Exception(f"Mistral vision error {response.status_code}: {response.text}")
+        return ai_type, model, response.json()["choices"][0]["message"]["content"]
+
+    elif ai_type == "ChatGPT":
+        api_key = get_setting("openai_api_key")
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": model,
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{image_data}"}},
+                ],
+            }],
+        }
+        response = requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=3600,
+        )
+        if response.status_code != 200:
+            raise Exception(f"OpenAI vision error {response.status_code}: {response.text}")
+        return ai_type, model, response.json()["choices"][0]["message"]["content"]
+
+    elif ai_type == "Gemini":
+        api_key = get_setting("gemini_api_key")
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+        payload = {
+            "contents": [{
+                "parts": [
+                    {"text": prompt},
+                    {"inlineData": {"mimeType": mime_type, "data": image_data}},
+                ]
+            }]
+        }
+        response = requests.post(url, json=payload, timeout=3600)
+        if response.status_code != 200:
+            raise Exception(f"Gemini vision error {response.status_code}: {response.text}")
+        return ai_type, model, response.json()["candidates"][0]["content"]["parts"][0]["text"]
+
+    else:
+        raise ValueError(f"Unsupported vision AI type: {ai_type}")
+
+
+def request_transcription(
+    setting_prefix: str,
+    audio_path: str,
+) -> Set[str]:
+    """
+    Request transcription of an audio file via an external API.
+    Returns a tuple of (type, model, transcription_text).
+    """
+    transcription_type = get_setting(f"{setting_prefix}_type", "local")
+    model = get_setting(f"{setting_prefix}_model", "whisper-1")
+
+    if transcription_type == "openai":
+        api_key = get_setting("openai_api_key")
+        with open(audio_path, "rb") as audio_file:
+            response = requests.post(
+                "https://api.openai.com/v1/audio/transcriptions",
+                headers={"Authorization": f"Bearer {api_key}"},
+                files={"file": (audio_path.split("/")[-1], audio_file)},
+                data={"model": model},
+                timeout=3600,
+            )
+        if response.status_code != 200:
+            raise Exception(f"OpenAI transcription error {response.status_code}: {response.text}")
+        return transcription_type, model, response.json()["text"]
+
+    elif transcription_type == "groq":
+        api_key = get_setting("groq_api_key")
+        with open(audio_path, "rb") as audio_file:
+            response = requests.post(
+                "https://api.groq.com/openai/v1/audio/transcriptions",
+                headers={"Authorization": f"Bearer {api_key}"},
+                files={"file": (audio_path.split("/")[-1], audio_file)},
+                data={"model": model},
+                timeout=3600,
+            )
+        if response.status_code != 200:
+            raise Exception(f"Groq transcription error {response.status_code}: {response.text}")
+        return transcription_type, model, response.json()["text"]
+
+    else:
+        raise ValueError(f"Unsupported transcription type: {transcription_type}")

@@ -52,17 +52,19 @@ class SummarizeManager:
                     logging.info("SUMMARY >> Attempting to get OCR.")
                     result = OCRManager.get(file)
                     if result is None:
-                        logging.info("SUMMARY >> No OCR found, re-adding to queue.")
-                        cls.queue.put(file)
+                        logging.info("SUMMARY >> No OCR found, cancelled.")
+                        # logging.info("SUMMARY >> No OCR found, re-adding to queue.")
+                        # cls.queue.put(file)
                         continue
                 elif mime.startswith("audio/") or mime.startswith("video/"):
                     logging.info("SUMMARY >> Attempting to get transcription.")
                     transcription = TranscriptionManager.get(file)
                     if transcription is None:
-                        logging.info(
-                            "SUMMARY >> No transcription found, re-adding to queue."
-                        )
-                        cls.queue.put(file)
+                        logging.info("SUMMARY >> No transcription found, cancelled.")
+                        # logging.info(
+                        #     "SUMMARY >> No transcription found, re-adding to queue."
+                        # )
+                        # cls.queue.put(file)
                         continue
 
                 task = (

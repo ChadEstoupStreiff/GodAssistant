@@ -7,6 +7,8 @@ from datetime import datetime
 
 from db import OCR, OCRTask, TaskStateEnum, get_db
 from sqlalchemy import and_
+from tools.ai import request_vision_llm
+from views.settings import get_setting
 
 
 class OCRManager:
@@ -55,31 +57,46 @@ class OCRManager:
                 db.commit()
 
                 logging.info(f"OCR >> Processing BLIP for file: {file}")
-                blip_proc = subprocess.run(
-                    ["python3", "/app/ocr_blip.py", file],
-                    capture_output=True,
-                    text=True,
-                )
-                if blip_proc.returncode != 0:
-                    raise RuntimeError(
-                        f"BLIP subprocess failed with code {blip_proc.returncode}: {blip_proc.stderr.strip()}"
+                blip_type = get_setting("blip_type", "local")
+                if blip_type in ("local", "blip"):
+                    blip_proc = subprocess.run(
+                        ["python3", "/app/ocr_blip.py", file],
+                        capture_output=True,
+                        text=True,
                     )
-                blip_result = blip_proc.stdout.strip().capitalize()
+                    if blip_proc.returncode != 0:
+                        raise RuntimeError(
+                            f"BLIP subprocess failed with code {blip_proc.returncode}: {blip_proc.stderr.strip()}"
+                        )
+                    blip_result = blip_proc.stdout.strip().capitalize()
+                else:
+                    _, _, blip_result = request_vision_llm(
+                        "blip",
+                        "Describe this image in one or two concise sentences.",
+                        file,
+                    )
                 logging.info(f"OCR >> BLIP Result for file {file}: {blip_result}")
 
-                logging.info(f"OCR >> Processing for file: {file}")
-                proc = subprocess.run(
-                    # ["python3", "/app/ocr_tesseract.py", file],
-                    ["python3", "/app/ocr_paddle.py", file],
-                    capture_output=True,
-                    text=True,
-                )
-                if proc.returncode != 0:
-                    raise RuntimeError(
-                        f"Subprocess failed with code {proc.returncode}: {proc.stderr.strip()}"
+                logging.info(f"OCR >> Processing OCR for file: {file}")
+                ocr_type = get_setting("ocr_type", "paddle")
+                if ocr_type in ("paddle", "local"):
+                    proc = subprocess.run(
+                        ["python3", "/app/ocr_paddle.py", file],
+                        capture_output=True,
+                        text=True,
                     )
-                result = proc.stdout.strip()
-                result = result[result.find("[") : result.rfind("]") + 1]
+                    if proc.returncode != 0:
+                        raise RuntimeError(
+                            f"Subprocess failed with code {proc.returncode}: {proc.stderr.strip()}"
+                        )
+                    result = proc.stdout.strip()
+                    result = result[result.find("[") : result.rfind("]") + 1]
+                else:
+                    _, _, result = request_vision_llm(
+                        "ocr",
+                        "Extract all text visible in this image. Return only the raw text, preserving line breaks.",
+                        file,
+                    )
                 logging.info(f"OCR >> Result for file {file}: {result}")
 
                 task.state = TaskStateEnum.COMPLETED

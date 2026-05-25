@@ -667,7 +667,7 @@ def see_file(file):
                     "Delete Link Mode",
                     help="Select 'On' to enable delete link mode. In this mode, you can delete links by clicking the delete button next to each link.",
                 )
-                for link in links:
+                for link in sorted(links, key=lambda x: x[1], reverse=True):
                     cols = st.columns([1, 6])
                     with cols[0]:
                         if delete_button:

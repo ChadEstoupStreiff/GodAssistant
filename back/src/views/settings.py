@@ -22,7 +22,11 @@ default_settings = {
     "enable_auto_transcription": True,
     "enable_auto_summary": True,
     "ollama_server": "http://ollama:11434",
-    "transcription_type": "llama",
+    "blip_type": "local",
+    "blip_model": "llava:7b",
+    "ocr_type": "paddle",
+    "ocr_model": "llava:7b",
+    "transcription_type": "local",
     "transcription_model": "small",
     "summarization_type": "llama",
     "summarization_model": "llama3.2:1b",
@@ -36,6 +40,7 @@ default_settings = {
     "mistral_api_key": "",
     "openai_api_key": "",
     "gemini_api_key": "",
+    "groq_api_key": "",
     "chat_user_description": "",
     "chat_presets": [
         [

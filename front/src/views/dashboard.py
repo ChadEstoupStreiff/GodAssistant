@@ -229,6 +229,11 @@ def dashboard():
                     value=metrics.get("nbr_tags", 0),
                     help="Total number of tags created in the system.",
                 )
+                st.metric(
+                    label="Summaries",
+                    value=metrics.get("nbr_summaries", 0),
+                    help="Number of files with an AI-generated summary.",
+                )
             with metric_cols[1]:
                 st.metric(
                     label="Total Calendars Events",
@@ -249,6 +254,11 @@ def dashboard():
                         + metrics.get("disk_usage", {}).get("files", 0)
                     ),
                     help="Total disk space used by the application. ( Cache + Ollama + Database + Files )",
+                )
+                st.metric(
+                    label="Links",
+                    value=metrics.get("nbr_links", 0),
+                    help="Number of semantic links between files.",
                 )
 
             disk_widget(metrics.get("disk_usage", {}))
