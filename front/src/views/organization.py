@@ -360,31 +360,46 @@ def _view_calendar(board_info, projects, tags, selected_projects, selected_tags,
     if "org_cal_month" not in st.session_state:
         st.session_state.org_cal_month = today.month
 
-    nav_cols = st.columns([1, 4, 1])
+    def _prev_month():
+        if st.session_state.org_cal_month == 1:
+            st.session_state.org_cal_month = 12
+            st.session_state.org_cal_year -= 1
+        else:
+            st.session_state.org_cal_month -= 1
+
+    def _next_month():
+        if st.session_state.org_cal_month == 12:
+            st.session_state.org_cal_month = 1
+            st.session_state.org_cal_year += 1
+        else:
+            st.session_state.org_cal_month += 1
+
+    nav_cols = st.columns([1, 2, 1, 1, 2, 1])
     with nav_cols[0]:
-        if st.button("◀ Prev", use_container_width=True):
-            if st.session_state.org_cal_month == 1:
-                st.session_state.org_cal_month = 12
-                st.session_state.org_cal_year -= 1
-            else:
-                st.session_state.org_cal_month -= 1
-            st.rerun()
-    with nav_cols[1]:
-        month_label = datetime.date(
-            st.session_state.org_cal_year, st.session_state.org_cal_month, 1
-        ).strftime("%B %Y")
-        st.markdown(
-            f"<h3 style='text-align:center; margin:0'>{month_label}</h3>",
-            unsafe_allow_html=True,
-        )
+        st.button("◀ Previous", on_click=_prev_month, use_container_width=True)
     with nav_cols[2]:
-        if st.button("Next ▶", use_container_width=True):
-            if st.session_state.org_cal_month == 12:
-                st.session_state.org_cal_month = 1
-                st.session_state.org_cal_year += 1
-            else:
-                st.session_state.org_cal_month += 1
-            st.rerun()
+        st.selectbox(
+            "Month",
+            options=range(12),
+            format_func=lambda x: [
+                "January", "February", "March", "April",
+                "May", "June", "July", "August",
+                "September", "October", "November", "December",
+            ][x],
+            key="calendar_month",
+            label_visibility="collapsed",
+        )
+    with nav_cols[3]:
+        st.number_input(
+            "Year",
+            min_value=0,
+            max_value=5000,
+            step=1,
+            key="calendar_year",
+            label_visibility="collapsed",
+        )
+    with nav_cols[5]:
+        st.button("Next ▶", on_click=_next_month, use_container_width=True)
 
     task_map = defaultdict(list)
     for task in tasks_with_due:
@@ -507,8 +522,6 @@ def _render_timeline_group(due_date, tasks, projects, tags, show_edit_tasks, tod
                     unsafe_allow_html=True,
                 )
 
-    st.divider()
-
 
 def _view_timeline(board_info, projects, tags, selected_projects, selected_tags, selected_priorities, show_edit_tasks):
     all_tasks = _collect_filtered_tasks(board_info, selected_projects, selected_tags, selected_priorities, True)
@@ -531,19 +544,19 @@ def _view_timeline(board_info, projects, tags, selected_projects, selected_tags,
 
     with col_in:
         st.markdown("### 📅 Incoming")
-        st.divider()
-        if not incoming_dates:
-            st.info("No upcoming tasks.")
-        for due_date in incoming_dates:
-            _render_timeline_group(due_date, grouped[due_date], projects, tags, show_edit_tasks, today)
+        with st.container(border=True):
+            if not incoming_dates:
+                st.info("No upcoming tasks.")
+            for due_date in incoming_dates:
+                _render_timeline_group(due_date, grouped[due_date], projects, tags, show_edit_tasks, today)
 
     with col_over:
         st.markdown("### 🔴 Overdue")
-        st.divider()
-        if not overdue_dates:
-            st.info("No overdue tasks.")
-        for due_date in overdue_dates:
-            _render_timeline_group(due_date, grouped[due_date], projects, tags, show_edit_tasks, today)
+        with st.container(border=True):
+            if not overdue_dates:
+                st.info("No overdue tasks.")
+            for due_date in overdue_dates:
+                _render_timeline_group(due_date, grouped[due_date], projects, tags, show_edit_tasks, today)
 
 
 def organization():

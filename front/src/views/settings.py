@@ -1,4 +1,5 @@
 import copy
+import datetime
 
 import pandas as pd
 import requests
@@ -542,6 +543,39 @@ def settings():
 
         cols = st.columns(2)
         with cols[0]:
+            with st.expander("Calendar Progress Bar", expanded=True):
+                settings["calendar_progress_bar_enabled"] = st.toggle(
+                    "Show progress bar in Calendar",
+                    value=settings.get("calendar_progress_bar_enabled", True),
+                )
+                settings["calendar_progress_bar_title"] = st.text_input(
+                    "Bar title",
+                    value=settings.get("calendar_progress_bar_title", "PhD Progress"),
+                )
+                pb_cols = st.columns(4)
+                with pb_cols[0]:
+                    pb_start_val = datetime.date.fromisoformat(
+                        settings.get("calendar_progress_bar_start_date", "2025-11-01")
+                    )
+                    pb_start = st.date_input("Start date", value=pb_start_val, key="pb_start")
+                    settings["calendar_progress_bar_start_date"] = pb_start.isoformat()
+                with pb_cols[1]:
+                    pb_end_val = datetime.date.fromisoformat(
+                        settings.get("calendar_progress_bar_end_date", "2028-10-31")
+                    )
+                    pb_end = st.date_input("Due date", value=pb_end_val, key="pb_end")
+                    settings["calendar_progress_bar_end_date"] = pb_end.isoformat()
+                with pb_cols[2]:
+                    settings["calendar_progress_bar_color1"] = st.color_picker(
+                        "Color 1 (start/end)",
+                        value=settings.get("calendar_progress_bar_color1", "#667eea"),
+                    )
+                with pb_cols[3]:
+                    settings["calendar_progress_bar_color2"] = st.color_picker(
+                        "Color 2 (middle peak)",
+                        value=settings.get("calendar_progress_bar_color2", "#f093fb"),
+                    )
+
             with st.expander("Chat Settings", expanded=True):
                 settings["chat_type"], settings["chat_model"] = chose_ai_menu(
                     settings["chat_type"], settings["chat_model"], key="chat"
@@ -561,7 +595,7 @@ def settings():
                     key="refractor",
                 )
 
-            with st.expander("Link Settings", expanded=True):
+            with st.expander("Auto Link Settings", expanded=True):
                 st.caption(
                     "AI model used by the 'Add auto link' feature to find semantic links between files."
                 )

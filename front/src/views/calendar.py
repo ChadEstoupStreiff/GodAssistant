@@ -9,6 +9,63 @@ from streamlit_elements import elements, mui, nivo
 from utils import get_setting, refractor_text_area, toast_for_rerun
 
 
+def shiny_progress_bar(
+    progress: float,
+    days_passed: int,
+    total_days: int,
+    color1: str = "#667eea",
+    color2: str = "#f093fb",
+):
+    pct = progress * 100
+    days_left = total_days - days_passed
+    label = f"{days_left} days left ({pct:.2f}%)"
+    width_pct = f"{pct:.4f}%"
+    st.markdown(
+        f"""
+        <style>
+        @keyframes shiny-shimmer {{
+            0% {{ background-position: 0% center; }}
+            100% {{ background-position: 200% center; }}
+        }}
+        .shiny-progress-wrap {{
+            width: 100%;
+            background: rgba(255,255,255,0.06);
+            border-radius: 50px;
+            padding: 3px;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.4);
+            margin: 8px 0 4px 0;
+        }}
+        .shiny-progress-bar {{
+            width: {width_pct};
+            min-width: 80px;
+            height: 23px;
+            border-radius: 50px;
+            background: linear-gradient(90deg, {color1} 0%, {color2} 50%, {color1} 100%);
+            background-size: 200% 100%;
+            animation: shiny-shimmer 4s linear infinite;
+            display: flex;
+            align-items: center;
+            justify-content: right;
+            color: white;
+            font-size: 12.5px;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.7);
+            box-shadow: 0 3px 14px rgba(118,75,162,0.55), 0 0 22px rgba(79,172,254,0.3);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding: 0 16px;
+        }}
+        </style>
+        <div class="shiny-progress-wrap">
+            <div class="shiny-progress-bar">{label}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def pie_chart(records, key="calendar_pie_chart"):
     pie_data = {}
     for record in records:
@@ -354,26 +411,34 @@ def dialog_create_record(projects):
             st.error(f"Error creating record: {response.text}")
 
 
-def box_date(date):
-    files = requests.get(
-        f"http://back:80/files/search?start_date={date}&end_date={date}"
-    )
-    error_files = None
-    if files.status_code == 200:
-        files = files.json()
+def box_date(date, prefetched_files=None, prefetched_records=None):
+    if prefetched_files is not None:
+        files = prefetched_files
+        error_files = None
     else:
-        error_files = files.text
-        files = []
+        resp = requests.get(
+            f"http://back:80/files/search?start_date={date}&end_date={date}"
+        )
+        error_files = None
+        if resp.status_code == 200:
+            files = resp.json()
+        else:
+            error_files = resp.text
+            files = []
 
-    records = requests.get(
-        f"http://back:80/calendar/search?start_date={date}&end_date={date}"
-    )
-    error_records = None
-    if records.status_code == 200:
-        records = records.json()
+    if prefetched_records is not None:
+        records = prefetched_records
+        error_records = None
     else:
-        error_records = records.text
-        records = []
+        resp = requests.get(
+            f"http://back:80/calendar/search?start_date={date}&end_date={date}"
+        )
+        error_records = None
+        if resp.status_code == 200:
+            records = resp.json()
+        else:
+            error_records = resp.text
+            records = []
 
     target_hourly_working_time = get_setting("target_hourly_working_time") or 7.5
 
@@ -428,54 +493,85 @@ def box_date(date):
 def calendar():
     projects = requests.get("http://back:80/projects").json()
 
+    if "calendar_month" not in st.session_state:
+        st.session_state.calendar_month = datetime.datetime.now().month - 1
+    if "calendar_year" not in st.session_state:
+        st.session_state.calendar_year = datetime.datetime.now().year
+
+    def prev_month():
+        if st.session_state.calendar_month == 0:
+            st.session_state.calendar_month = 11
+            st.session_state.calendar_year -= 1
+        else:
+            st.session_state.calendar_month -= 1
+
+    def next_month():
+        if st.session_state.calendar_month == 11:
+            st.session_state.calendar_month = 0
+            st.session_state.calendar_year += 1
+        else:
+            st.session_state.calendar_month += 1
+
+        
+    pb_enabled = get_setting("calendar_progress_bar_enabled")
+    if pb_enabled is None:
+        pb_enabled = True
     with st.sidebar:
         if st.button("🆕 Create Record", use_container_width=True):
             dialog_create_record(projects)
+            
+        if pb_enabled:
+            enable_progress_bar = st.toggle("Enable Progress Bar", value=True)
         enable_weekends = st.toggle("Enable Weekends", value=False)
-        cols = st.columns(2)
-        with cols[0]:
-            selected_month = st.selectbox(
-                "Month",
-                options=range(12),
-                format_func=lambda x: [
-                    "January",
-                    "February",
-                    "March",
-                    "April",
-                    "May",
-                    "June",
-                    "July",
-                    "August",
-                    "September",
-                    "October",
-                    "November",
-                    "December",
-                ][x],
-                index=datetime.datetime.now().month - 1,
-            )
-        with cols[1]:
-            selected_year = st.number_input(
-                "Year",
-                min_value=0,
-                max_value=5000,
-                value=datetime.datetime.now().year,
-                step=1,
-            )
+
+    if pb_enabled and enable_progress_bar:
+        pb_title = get_setting("calendar_progress_bar_title") or "PhD Progress"
+        pb_start_str = get_setting("calendar_progress_bar_start_date") or "2025-11-01"
+        pb_end_str = get_setting("calendar_progress_bar_end_date") or "2028-10-31"
+        today = datetime.date.today()
+        pb_start = datetime.date.fromisoformat(pb_start_str)
+        pb_end = datetime.date.fromisoformat(pb_end_str)
+        total_days = (pb_end - pb_start).days
+        days_passed = (today - pb_start).days
+        progress = max(0.0, min(1.0, days_passed / total_days))
+        pb_color1 = get_setting("calendar_progress_bar_color1") or "#667eea"
+        pb_color2 = get_setting("calendar_progress_bar_color2") or "#f093fb"
+        shiny_progress_bar(progress, days_passed, total_days, pb_color1, pb_color2)
+        st.caption(f"{pb_title}: {today} -> {pb_end} | {days_passed} / {total_days} days | {total_days - days_passed} days left | {progress:.2%} complete")
 
     tab_calendar, tab_stats = st.tabs(["📅 Calendar", "📊 Statistics"])
 
     with tab_calendar:
-        # Just for me :)
-        today = datetime.date.today()
-        start_date = datetime.date(2025, 11, 1)  # 2025 of november
-        end_date = datetime.date(2028, 10, 31)  # 3 years, until october 2028
-        total_days = (end_date - start_date).days
-        days_passed = (today - start_date).days
-        progress = max(0.0, min(1.0, days_passed / total_days))
-        st.progress(
-            progress,
-            text=f"PhD Progress - {(progress * 100):.2f}% - {days_passed} / {total_days} days - {total_days - days_passed} days left",
-        )
+
+        nav_cols = st.columns([1, 2, 1, 1, 2, 1])
+        with nav_cols[0]:
+            st.button("◀ Previous", on_click=prev_month, use_container_width=True)
+        with nav_cols[2]:
+            st.selectbox(
+                "Month",
+                options=range(12),
+                format_func=lambda x: [
+                    "January", "February", "March", "April",
+                    "May", "June", "July", "August",
+                    "September", "October", "November", "December",
+                ][x],
+                key="calendar_month",
+                label_visibility="collapsed",
+            )
+        with nav_cols[3]:
+            st.number_input(
+                "Year",
+                min_value=0,
+                max_value=5000,
+                step=1,
+                key="calendar_year",
+                label_visibility="collapsed",
+            )
+        with nav_cols[5]:
+            st.button("Next ▶", on_click=next_month, use_container_width=True)
+
+        selected_month = st.session_state.calendar_month
+        selected_year = st.session_state.calendar_year
 
         cols = st.columns(7 if enable_weekends else 5)
         for i in range(7 if enable_weekends else 5):
@@ -494,6 +590,28 @@ def calendar():
                     }**"""
                 )
         start_date = datetime.date(selected_year, selected_month + 1, 1)
+        month_end = (start_date + datetime.timedelta(days=32)).replace(day=1) - datetime.timedelta(days=1)
+
+        all_files_resp = requests.get(
+            f"http://back:80/files/search?start_date={start_date}&end_date={month_end}"
+        )
+        all_records_resp = requests.get(
+            f"http://back:80/calendar/search?start_date={start_date}&end_date={month_end}"
+        )
+
+        files_by_date = {}
+        if all_files_resp.status_code == 200:
+            for f in all_files_resp.json():
+                # f is a path string: /shared/YYYY-MM-DD/subfolder/filename
+                day = f.split("/")[2][:10]
+                files_by_date.setdefault(day, []).append(f)
+
+        records_by_date = {}
+        if all_records_resp.status_code == 200:
+            for r in all_records_resp.json():
+                day = str(r.get("date", ""))[:10]
+                records_by_date.setdefault(day, []).append(r)
+
         start_date_offset = start_date.weekday()
         for i in range(6):
             cols = st.columns(7 if enable_weekends else 5)
@@ -503,8 +621,13 @@ def calendar():
                         days=i * 7 + j - start_date_offset
                     )
                     if date.month == selected_month + 1:
+                        date_str = date.strftime("%Y-%m-%d")
                         with cols[j]:
-                            box_date(date)
+                            box_date(
+                                date,
+                                prefetched_files=files_by_date.get(date_str, []),
+                                prefetched_records=records_by_date.get(date_str, []),
+                            )
 
     with tab_stats:
         with st.form("calendar stat form"):
