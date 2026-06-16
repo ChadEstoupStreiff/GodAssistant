@@ -1,4 +1,5 @@
 import datetime
+import json
 
 import requests
 import streamlit as st
@@ -386,21 +387,35 @@ def dialog_create_record(projects):
         placeholder="Enter attendees",
         help="Enter the attendees for this record, separated by commas.",
     )
+    all_contacts = requests.get("http://back:80/contacts").json()
+    new_record_contacts = st.multiselect(
+        "Contacts",
+        options=all_contacts,
+        format_func=lambda c: c["name"] + (f" — {c['company']}" if c.get("company") else ""),
+    )
+    new_record_contact_ids = [c["id"] for c in new_record_contacts]
 
     if st.button("Save Record", use_container_width=True):
         if len(new_record_title) == 0:
             st.error("Title cannot be empty.")
             return
-        request = f"http://back:80/calendar/record?project={new_record_project}&date={new_record_date}&title={new_record_title}&time_spent={new_record_time_spent}"
+        params = {
+            "project": new_record_project,
+            "date": new_record_date,
+            "title": new_record_title,
+            "time_spent": new_record_time_spent,
+        }
         if new_record_description:
-            request += f"&description={new_record_description}"
+            params["description"] = new_record_description
         if new_record_location:
-            request += f"&location={new_record_location}"
+            params["location"] = new_record_location
         if new_record_attendees:
-            request += f"&attendees={new_record_attendees}"
+            params["attendees"] = new_record_attendees
         if new_start_time:
-            request += f"&start_time={new_start_time.strftime('%H:%M:%S')}"
-        response = requests.post(request)
+            params["start_time"] = new_start_time.strftime("%H:%M:%S")
+        if new_record_contact_ids:
+            params["contacts"] = json.dumps(new_record_contact_ids)
+        response = requests.post("http://back:80/calendar/record", params=params)
         if response.status_code == 200:
             toast_for_rerun(
                 "Record created successfully!",

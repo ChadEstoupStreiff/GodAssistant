@@ -98,9 +98,17 @@ import views.settings
 
 app.include_router(views.settings.router)
 
+import views.contacts
+
+app.include_router(views.contacts.router)
+
 import views.preview
 
 app.include_router(views.preview.router)
+
+import views.pinned
+
+app.include_router(views.pinned.router)
 
 
 @app.get("/ocr/health")

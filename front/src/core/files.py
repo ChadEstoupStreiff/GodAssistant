@@ -609,7 +609,7 @@ def boxes_files(
         with cols[i % nbr_of_files_per_line]:
             preview_container, selected = box_file(
                 file,
-                height=600 if show_preview else 400,
+                height=800 if show_preview else 600,
                 show_preview=show_preview,
                 select_mode=interact_mode == multiple_selection_options[1],
                 select_default_value=select_default_value,

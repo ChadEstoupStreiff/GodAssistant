@@ -15,7 +15,7 @@ from controllers.PreviewManager import PreviewManager
 from controllers.SummarizeManager import SummarizeManager
 from controllers.TranscriptionManager import TranscriptionManager
 from db import get_db
-from db.models import Note, ProjectFile, TagFile, Link, StockPile
+from db.models import Note, ProjectFile, TagFile, Link, StockPile, Contact, ContactFile
 from fastapi import APIRouter, HTTPException, UploadFile
 from PIL import Image
 from pillow_heif import register_heif_opener
@@ -73,6 +73,7 @@ async def upload_files(
     date: str = None,
     projects: str = None,
     tags: str = None,
+    contacts: str = None,
     file_edit_info: str = None,
 ):
     """
@@ -82,6 +83,7 @@ async def upload_files(
     date = date or datetime.now().strftime("%Y-%m-%d")
     projects = json.loads(projects) if projects else []
     tags = json.loads(tags) if tags else []
+    contacts = json.loads(contacts) if contacts else []
     try:
         for file in files:
             file_date = file_edit_info.get(file.filename, {}).get("date", date)
@@ -145,6 +147,12 @@ async def upload_files(
                 for tag in tags + file_edit_info.get(file.filename, {}).get("tags", []):
                     tag_file = TagFile(file=file_path, tag=tag)
                     db.add(tag_file)
+
+                # Add to ContactFile
+                for contact_id in contacts + file_edit_info.get(file.filename, {}).get("contacts", []):
+                    contact_obj = db.query(Contact).filter(Contact.id == contact_id).first()
+                    if contact_obj:
+                        db.add(ContactFile(contact_id=contact_id, file=file_path))
 
                 db.commit()
             except Exception as e:

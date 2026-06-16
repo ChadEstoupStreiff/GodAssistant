@@ -1,8 +1,9 @@
 import datetime
+import json
 import logging
 import traceback
 
-from db import CalendarRecord, get_db
+from db import CalendarContact, CalendarRecord, Contact, get_db
 from fastapi import APIRouter, HTTPException
 
 router = APIRouter(prefix="/calendar", tags=["Calendar"])
@@ -39,6 +40,7 @@ async def create_calendar_record(
     description: str = None,
     location: str = None,
     attendees: str = None,
+    contacts: str = None,
 ):
     """
     Create a new calendar record.
@@ -58,6 +60,11 @@ async def create_calendar_record(
             attendees=attendees,
         )
         db.add(record)
+        db.flush()
+        contact_ids = json.loads(contacts) if contacts else []
+        for contact_id in contact_ids:
+            if db.query(Contact).filter(Contact.id == contact_id).first():
+                db.add(CalendarContact(calendar_id=record.id, contact_id=contact_id))
         db.commit()
     except Exception as e:
         db.rollback()
@@ -79,6 +86,7 @@ async def edit_calendar_record(
     description: str = None,
     location: str = None,
     attendees: str = None,
+    contacts: str = None,
 ):
     """
     Edit an existing calendar record.
@@ -101,6 +109,13 @@ async def edit_calendar_record(
             record.location = location
         if attendees is not None:
             record.attendees = attendees
+        if contacts is not None:
+            contact_ids = json.loads(contacts)
+            for row in db.query(CalendarContact).filter(CalendarContact.calendar_id == record_id).all():
+                db.delete(row)
+            for contact_id in contact_ids:
+                if db.query(Contact).filter(Contact.id == contact_id).first():
+                    db.add(CalendarContact(calendar_id=record_id, contact_id=contact_id))
 
         db.commit()
         return {"message": "Record updated successfully"}
@@ -161,6 +176,13 @@ async def search_calendar_records(
 
         records = db_query.all()
         records = [r.__dict__ for r in records]
+        for record in records:
+            cal_contacts = db.query(CalendarContact).filter(CalendarContact.calendar_id == record["id"]).all()
+            record["contacts"] = [
+                db.query(Contact).filter(Contact.id == cc.contact_id).first().__dict__
+                for cc in cal_contacts
+                if db.query(Contact).filter(Contact.id == cc.contact_id).first()
+            ]
         records.sort(key=lambda x: x["date"], reverse=True)
         return records
     except Exception as e:

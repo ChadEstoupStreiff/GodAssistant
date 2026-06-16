@@ -6,6 +6,7 @@ from typing import List
 
 import requests
 import streamlit as st
+from core.contacts import render_contact_pills
 from core.explorer import search_engine as file_search_engine
 from core.files import display_files, representation_mode_select
 from core.ocr import _bbox_from_any, _draw_label, _open_image
@@ -514,10 +515,28 @@ def see_file(file):
         f"http://back:80/stockpile/recentopened?file={file}",
     )
 
-    col1, col2 = st.columns(2)
+    is_pinned = requests.get(f"http://back:80/pinned/is_pinned?file={file}").json()
+
+    col1, col2, col3 = st.columns(3)
     with col1:
         download_file_button(file)
     with col2:
+        pin_label = "📌 Unpin" if is_pinned else "📌 Pin"
+        if st.button(
+            pin_label,
+            use_container_width=True,
+            help="Pin this file to the dashboard." if not is_pinned else "Unpin this file from the dashboard.",
+            key=f"see_pin_{file}",
+        ):
+            if is_pinned:
+                requests.delete(f"http://back:80/pinned?file={file}")
+                toast_for_rerun("File unpinned from dashboard.", icon="📌")
+            else:
+                requests.post(f"http://back:80/pinned?file={file}")
+                toast_for_rerun("File pinned to dashboard.", icon="📌")
+            clear_cache()
+            st.rerun()
+    with col3:
         if st.button(
             "🗑️",
             use_container_width=True,
@@ -526,8 +545,8 @@ def see_file(file):
         ):
             dialog_delete_file(file)
 
-    tab_details, tab_notes, tab_links, tab_summarize, tab_tasks = st.tabs(
-        ["📋 Détails", "📝 Notes", "🔗 Links", "🧠 Summary", "⏳ Tasks"]
+    tab_details, tab_notes, tab_links, tab_summarize, tab_tasks, tab_contacts = st.tabs(
+        ["📋 Détails", "📝 Notes", "🔗 Links", "🧠 Summary", "⏳ Tasks", "👤 Contacts"]
     )
     # MARK: DETAILS
     metadata = None
@@ -573,6 +592,12 @@ def see_file(file):
                     ),
                     unsafe_allow_html=True,
                 )
+
+            contacts_of_file = requests.get(f"http://back:80/contacts_of/{file}")
+            file_contacts = contacts_of_file.json() if contacts_of_file.status_code == 200 else []
+            if file_contacts:
+                st.markdown("##### Contacts")
+                render_contact_pills(file_contacts)
 
             spacer()
             if st.button("Edit file details", use_container_width=True):
@@ -772,6 +797,87 @@ def see_file(file):
             if mime.startswith("audio/") or mime.startswith("video/")
             else False,
         )
+
+    # MARK: CONTACTS
+    with tab_contacts:
+        import base64 as _b64
+
+        resp = requests.get(f"http://back:80/contacts_of/{file}")
+        linked_contacts = resp.json() if resp.status_code == 200 else []
+
+        all_contacts_resp = requests.get("http://back:80/contacts")
+        all_contacts = all_contacts_resp.json() if all_contacts_resp.status_code == 200 else []
+        linked_ids = {c["id"] for c in linked_contacts}
+        available_contacts = [c for c in all_contacts if c["id"] not in linked_ids]
+
+        # Quick-add row always at the top
+        add_cols = st.columns([4, 1])
+        with add_cols[0]:
+            new_contact = st.selectbox(
+                "Link contact",
+                options=available_contacts,
+                format_func=lambda c: c["name"] + (f" ({c['company']})" if c.get("company") else ""),
+                key=f"link_contact_select_{file}",
+                label_visibility="collapsed",
+                placeholder="Add a contact…",
+            ) if available_contacts else None
+        with add_cols[1]:
+            if st.button("＋ Link", use_container_width=True, key=f"link_contact_btn_{file}", disabled=not available_contacts):
+                requests.post(
+                    f"http://back:80/contact/{new_contact['id']}/file",
+                    params={"file": file},
+                )
+                toast_for_rerun("Contact linked.", icon="✅")
+                st.rerun()
+
+        if linked_contacts:
+            st.divider()
+            for contact in linked_contacts:
+                avatar_resp = requests.get(f"http://back:80/contact/{contact['id']}/photo")
+                avatar_html = ""
+                if avatar_resp.status_code == 200:
+                    b64 = _b64.b64encode(avatar_resp.content).decode()
+                    avatar_html = (
+                        f'<img src="data:image/jpeg;base64,{b64}" '
+                        f'style="width:40px;height:40px;border-radius:50%;'
+                        f'object-fit:cover;vertical-align:middle;margin-right:8px;">'
+                    )
+
+                av_col, info_col, btn_col = st.columns([1, 6, 1])
+                with av_col:
+                    if avatar_html:
+                        st.markdown(avatar_html, unsafe_allow_html=True)
+                    else:
+                        st.markdown(
+                            '<div style="width:40px;height:40px;border-radius:50%;'
+                            'background:#555;display:flex;align-items:center;'
+                            'justify-content:center;font-size:1.2rem;">👤</div>',
+                            unsafe_allow_html=True,
+                        )
+                with info_col:
+                    subtitle = " · ".join(filter(None, [contact.get("role"), contact.get("company")]))
+                    st.markdown(f"**{contact['name']}**" + (f"  ·  {subtitle}" if subtitle else ""))
+                    details = "  ·  ".join(filter(None, [
+                        f"📧 {contact['email']}" if contact.get("email") else None,
+                        f"📞 {contact['phone']}" if contact.get("phone") else None,
+                    ]))
+                    if details:
+                        st.caption(details)
+                with btn_col:
+                    if st.button(
+                        "🗑️",
+                        key=f"unlink_contact_{contact['id']}_{file}",
+                        help=f"Unlink {contact['name']}",
+                        use_container_width=True,
+                    ):
+                        requests.delete(
+                            f"http://back:80/contact/{contact['id']}/file",
+                            params={"file": file},
+                        )
+                        toast_for_rerun("Contact unlinked.", icon="🗑️")
+                        st.rerun()
+        elif not available_contacts:
+            st.caption("No contacts exist yet. Create one in the Contacts page.")
 
     return {
         "file_name": file_name,

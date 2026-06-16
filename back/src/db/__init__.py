@@ -28,6 +28,13 @@ from db.models import (
     KanbanColumnTask,
     Link,
     PreviewTask,
+    Contact,
+    ContactFile,
+    ContactTag,
+    ContactProject,
+    TaskContact,
+    CalendarContact,
+    PinnedFile,
 )
 
 

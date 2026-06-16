@@ -9,6 +9,7 @@ from db import (
     KanbanColumnTask,
     Task,
     TaskCalendar,
+    TaskContact,
     TaskFile,
     TaskProject,
     TaskStateEnum,
@@ -54,6 +55,7 @@ class TaskCreateRequest(BaseModel):
     tags: Optional[List[str]] = None
     files: Optional[List[str]] = None
     calendars: Optional[List[str]] = None
+    contacts: Optional[List[str]] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     priority: Optional[float] = 0.0
@@ -83,6 +85,8 @@ async def create_task(task: TaskCreateRequest):
             db.add(TaskFile(task_id=task_db.id, file=file))
         for calendar in task.calendars or []:
             db.add(TaskCalendar(task_id=task_db.id, calendar_id=calendar))
+        for contact in task.contacts or []:
+            db.add(TaskContact(task_id=task_db.id, contact_id=contact))
         db.commit()
         db.refresh(task_db)
         return task_db.__dict__
@@ -106,11 +110,13 @@ async def get_task(task_id: str):
         tags = db.query(TaskTag).filter(TaskTag.task_id == task_id).all()
         files = db.query(TaskFile).filter(TaskFile.task_id == task_id).all()
         calendars = db.query(TaskCalendar).filter(TaskCalendar.task_id == task_id).all()
+        contacts = db.query(TaskContact).filter(TaskContact.task_id == task_id).all()
         if task:
             task.__dict__["projects"] = [p.project_name for p in projects]
             task.__dict__["tags"] = [t.tag for t in tags]
             task.__dict__["files"] = [f.file for f in files]
             task.__dict__["calendars"] = [c.calendar_id for c in calendars]
+            task.__dict__["contacts"] = [c.contact_id for c in contacts]
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
         return task.__dict__
@@ -146,6 +152,10 @@ async def delete_task(task_id: str):
             db.query(TaskCalendar).filter(TaskCalendar.task_id == task_id).all()
         ):
             db.delete(calendar)
+        for contact in (
+            db.query(TaskContact).filter(TaskContact.task_id == task_id).all()
+        ):
+            db.delete(contact)
         db.delete(task)
         db.commit()
         return {"detail": "Task deleted"}
@@ -186,6 +196,10 @@ async def update_task(task_id: str, task: TaskCreateRequest):
             db.query(TaskCalendar).filter(TaskCalendar.task_id == task_id).all()
         ):
             db.delete(calendar)
+        for contact in (
+            db.query(TaskContact).filter(TaskContact.task_id == task_id).all()
+        ):
+            db.delete(contact)
         for project in task.projects or []:
             db.add(TaskProject(task_id=task_id, project_name=project))
         for tag in task.tags or []:
@@ -194,6 +208,8 @@ async def update_task(task_id: str, task: TaskCreateRequest):
             db.add(TaskFile(task_id=task_id, file=file))
         for calendar in task.calendars or []:
             db.add(TaskCalendar(task_id=task_id, calendar_id=calendar))
+        for contact in task.contacts or []:
+            db.add(TaskContact(task_id=task_id, contact_id=contact))
         db.commit()
         db.refresh(existing_task)
         return existing_task.__dict__
@@ -321,10 +337,16 @@ async def get_kanban_board(board_id: str):
                         .filter(TaskCalendar.task_id == task["id"])
                         .all()
                     )
+                    contacts = (
+                        db.query(TaskContact)
+                        .filter(TaskContact.task_id == task["id"])
+                        .all()
+                    )
                     task["projects"] = [p.project_name for p in projects]
                     task["tags"] = [t.tag for t in tags]
                     task["files"] = [f.file for f in files]
                     task["calendars"] = [c.calendar_id for c in calendars]
+                    task["contacts"] = [c.contact_id for c in contacts]
         if not board:
             raise HTTPException(status_code=404, detail="Kanban board not found")
         return board.__dict__

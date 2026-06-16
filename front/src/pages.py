@@ -55,11 +55,23 @@ PAGE_AUDIO_RECORD = st.Page(
     icon="🎤",
     url_path="audio_record",
 )
+PAGE_QUICK_UPLOAD = st.Page(
+    "views/quick_upload.py",
+    title="Quick Upload",
+    icon="📤",
+    url_path="quick_upload",
+)
 PAGE_CHAT = st.Page(
     "views/chat.py",
     title="Chat",
     icon="💬",
     url_path="chat",
+)
+PAGE_CONTACTS = st.Page(
+    "views/contacts.py",
+    title="Contacts",
+    icon="👤",
+    url_path="contacts",
 )
 PAGE_SETTINGS = st.Page(
     "views/settings.py",

@@ -39,8 +39,9 @@ def dialog_upload(files):
         )
     projects = requests.get("http://back:80/projects").json()
     tags = requests.get("http://back:80/tags").json()
+    contacts = requests.get("http://back:80/contacts").json()
 
-    cols = st.columns(2)
+    cols = st.columns(3)
     with cols[0]:
         selected_projects = st.multiselect(
             "Select Projects",
@@ -53,6 +54,14 @@ def dialog_upload(files):
             options=[t["name"] for t in tags],
             help="Select the tags to associate with the uploaded files.",
         )
+    with cols[2]:
+        selected_contacts = st.multiselect(
+            "Select Contacts",
+            options=contacts,
+            format_func=lambda c: c["name"],
+            help="Select the contacts to associate with the uploaded files.",
+        )
+    selected_contact_ids = [c["id"] for c in selected_contacts]
 
     file_edit_info = {}
     rest_projects = [p for p in projects if p["name"] not in selected_projects]
@@ -111,6 +120,7 @@ def dialog_upload(files):
                 "file_edit_info": json.dumps(file_edit_info),
                 "projects": json.dumps(selected_projects),
                 "tags": json.dumps(selected_tags),
+                "contacts": json.dumps(selected_contact_ids),
             }
             if not toggle_edit_date:
                 params["date"] = date.strftime("%Y-%m-%d")
@@ -160,6 +170,17 @@ def dashboard():
 
     with cols[0]:
         today = datetime.date.today()
+
+        pinned_files = requests.get("http://back:80/pinned").json()
+        if pinned_files:
+            with st.expander(f"📌 Pinned files - {len(pinned_files)} files", expanded=True):
+                display_files(
+                    pinned_files,
+                    representation_mode=1,
+                    multi_select_mode=0,
+                    nbr_of_files_per_line=4,
+                    key="pinned_files",
+                )
 
         sub_cols = st.columns(2)
         with sub_cols[0]:

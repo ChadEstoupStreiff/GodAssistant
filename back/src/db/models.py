@@ -309,3 +309,95 @@ class PreviewTask(Base):
     added = Column(DateTime, primary_key=True)
     completed = Column(DateTime, nullable=True)
     result = Column(TEXT, nullable=True)
+
+
+class Contact(Base):
+    __tablename__ = "Contact"
+
+    id = Column(
+        String(255), primary_key=True, default=lambda: str(uuid.uuid4()), index=True
+    )
+    name = Column(String(255), nullable=False)
+    email = Column(String(255), nullable=True)
+    phone = Column(String(64), nullable=True)
+    company = Column(String(255), nullable=True)
+    role = Column(String(255), nullable=True)
+    description = Column(TEXT, nullable=True)
+    notes = Column(TEXT, default="")
+
+
+class ContactFile(Base):
+    __tablename__ = "ContactFile"
+
+    contact_id = mapped_column(
+        ForeignKey("Contact.id", ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
+    file = Column(String(512), primary_key=True, index=True)
+
+
+class ContactTag(Base):
+    __tablename__ = "ContactTag"
+
+    contact_id = mapped_column(
+        ForeignKey("Contact.id", ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
+    tag = mapped_column(
+        ForeignKey("Tag.name", ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
+
+
+class ContactProject(Base):
+    __tablename__ = "ContactProject"
+
+    contact_id = mapped_column(
+        ForeignKey("Contact.id", ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
+    project_name = mapped_column(
+        ForeignKey("Project.name", ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
+
+
+class TaskContact(Base):
+    __tablename__ = "TaskContact"
+
+    task_id = mapped_column(
+        ForeignKey("Task.id", ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
+    contact_id = mapped_column(
+        ForeignKey("Contact.id", ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
+
+
+class CalendarContact(Base):
+    __tablename__ = "CalendarContact"
+
+    calendar_id = mapped_column(
+        ForeignKey("CalendarRecord.id", ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
+    contact_id = mapped_column(
+        ForeignKey("Contact.id", ondelete="CASCADE", onupdate="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
+
+
+class PinnedFile(Base):
+    __tablename__ = "PinnedFile"
+
+    file = Column(String(512), primary_key=True, index=True)

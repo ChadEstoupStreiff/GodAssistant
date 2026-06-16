@@ -5,6 +5,7 @@ from typing import List
 
 import requests
 import streamlit as st
+from core.contacts import render_contact_pills
 from utils import (
     generate_aside_project_markdown,
     generate_aside_tag_markdown,
@@ -138,6 +139,13 @@ def create_task(column, default_project: List[str] = []):
         "Tags",
         options=[t["name"] for t in tags],
     )
+    contacts_resp = requests.get("http://back:80/contacts").json()
+    new_contacts = st.multiselect(
+        "Contacts",
+        options=contacts_resp,
+        format_func=lambda c: c["name"] + (f" — {c['company']}" if c.get("company") else ""),
+    )
+    new_contact_ids = [c["id"] for c in new_contacts]
 
     if st.button("Add Task", use_container_width=True):
         if not task_title:
@@ -153,6 +161,7 @@ def create_task(column, default_project: List[str] = []):
                 "tags": new_tags,
                 "files": [],
                 "calendars": [],
+                "contacts": new_contact_ids,
                 "start_date": start_date.strftime("%Y-%m-%dT%H:%M:%S")
                 if start_date
                 else None,
@@ -290,6 +299,15 @@ def edit_task(task):
         options=[t["name"] for t in tags],
         default=task["tags"],
     )
+    contacts_resp = requests.get("http://back:80/contacts").json()
+    current_contact_ids = task.get("contacts", [])
+    new_contacts = st.multiselect(
+        "Contacts",
+        options=contacts_resp,
+        default=[c for c in contacts_resp if c["id"] in current_contact_ids],
+        format_func=lambda c: c["name"] + (f" — {c['company']}" if c.get("company") else ""),
+    )
+    new_contact_ids = [c["id"] for c in new_contacts]
 
     if st.button("Save changes", use_container_width=True):
         if not new_title:
@@ -305,6 +323,7 @@ def edit_task(task):
                 "tags": new_tags,
                 "files": task["files"],
                 "calendars": task["calendars"],
+                "contacts": new_contact_ids,
                 "start_date": new_start_date.strftime("%Y-%m-%dT%H:%M:%S")
                 if new_start_date
                 else None,
@@ -445,7 +464,7 @@ def _view_calendar(board_info, projects, tags, selected_projects, selected_tags,
                                 st.markdown(f"{emoji}{task['title']}")
 
 
-def _render_timeline_group(due_date, tasks, projects, tags, show_edit_tasks, today):
+def _render_timeline_group(due_date, tasks, projects, tags, contacts_by_id, show_edit_tasks, today):
     days_diff = (due_date - today).days
     if days_diff < 0:
         n = -days_diff
@@ -521,9 +540,12 @@ def _render_timeline_group(due_date, tasks, projects, tags, show_edit_tasks, tod
                     ),
                     unsafe_allow_html=True,
                 )
+            if task.get("contacts"):
+                task_contacts = [contacts_by_id[cid] for cid in task["contacts"] if cid in contacts_by_id]
+                render_contact_pills(task_contacts)
 
 
-def _view_timeline(board_info, projects, tags, selected_projects, selected_tags, selected_priorities, show_edit_tasks):
+def _view_timeline(board_info, projects, tags, contacts_by_id, selected_projects, selected_tags, selected_priorities, show_edit_tasks):
     all_tasks = _collect_filtered_tasks(board_info, selected_projects, selected_tags, selected_priorities, True)
     tasks_with_due = [t for t in all_tasks if t["end_date"]]
 
@@ -548,7 +570,7 @@ def _view_timeline(board_info, projects, tags, selected_projects, selected_tags,
             if not incoming_dates:
                 st.info("No upcoming tasks.")
             for due_date in incoming_dates:
-                _render_timeline_group(due_date, grouped[due_date], projects, tags, show_edit_tasks, today)
+                _render_timeline_group(due_date, grouped[due_date], projects, tags, contacts_by_id, show_edit_tasks, today)
 
     with col_over:
         st.markdown("### 🔴 Overdue")
@@ -556,7 +578,7 @@ def _view_timeline(board_info, projects, tags, selected_projects, selected_tags,
             if not overdue_dates:
                 st.info("No overdue tasks.")
             for due_date in overdue_dates:
-                _render_timeline_group(due_date, grouped[due_date], projects, tags, show_edit_tasks, today)
+                _render_timeline_group(due_date, grouped[due_date], projects, tags, contacts_by_id, show_edit_tasks, today)
 
 
 def organization():
@@ -582,6 +604,9 @@ def organization():
             options=[board for board in kaban_boards],
             format_func=lambda board: board["name"],
         )
+
+    all_contacts = requests.get("http://back:80/contacts").json()
+    contacts_by_id = {c["id"]: c for c in all_contacts}
 
     with cols[1]:
         projects = requests.get("http://back:80/projects").json()
@@ -658,7 +683,7 @@ def organization():
             )
         elif view_mode == "Timeline":
             _view_timeline(
-                board_info, projects, tags,
+                board_info, projects, tags, contacts_by_id,
                 selected_projects, selected_tags, selected_priorities,
                 show_edit_tasks,
             )
@@ -908,6 +933,9 @@ def organization():
                                         ", ".join(task["calendars"])
                                     )
                                 )
+                            if task.get("contacts"):
+                                task_contacts = [contacts_by_id[cid] for cid in task["contacts"] if cid in contacts_by_id]
+                                render_contact_pills(task_contacts)
 
             # MARK: ADD NEW COLUMN
             if show_edit_columns:

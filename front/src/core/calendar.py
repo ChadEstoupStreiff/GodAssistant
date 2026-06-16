@@ -1,13 +1,17 @@
 import datetime
+import json
 
 import requests
 import streamlit as st
+from core.contacts import render_contact_pills
 from utils import generate_project_visual_markdown, toast_for_rerun, refractor_text_area
 
 
 @st.dialog("✏️ Edit Record", width="large")
 def dialog_edit_record(record):
     projects = [p["name"] for p in requests.get("http://back:80/projects").json()]
+    all_contacts = requests.get("http://back:80/contacts").json()
+    current_contact_ids = [c["id"] for c in record.get("contacts", [])]
 
     edited_title = st.text_input("Title", value=record.get("title", ""))
     edited_description = refractor_text_area(
@@ -30,10 +34,26 @@ def dialog_edit_record(record):
         value=record.get("attendees", ""),
         placeholder="Enter attendees, separated by commas",
     )
+    edited_contacts = st.multiselect(
+        "Contacts",
+        options=all_contacts,
+        default=[c for c in all_contacts if c["id"] in current_contact_ids],
+        format_func=lambda c: c["name"] + (f" — {c['company']}" if c.get("company") else ""),
+    )
+    edited_contact_ids = [c["id"] for c in edited_contacts]
 
     if st.button("✅ Save Changes", use_container_width=True):
         result = requests.put(
-            f"http://back:80/calendar/record/{record['id']}?title={edited_title}&project={edited_project}&time_spent={edited_time_spent}&description={edited_description}&location={edited_location}&attendees={edited_attendees}",
+            f"http://back:80/calendar/record/{record['id']}",
+            params={
+                "title": edited_title,
+                "project": edited_project,
+                "time_spent": edited_time_spent,
+                "description": edited_description,
+                "location": edited_location,
+                "attendees": edited_attendees,
+                "contacts": json.dumps(edited_contact_ids),
+            },
         )
         if result.status_code == 200:
             toast_for_rerun("Record updated successfully!", icon="✅")
@@ -102,6 +122,10 @@ def box_calendar_record(
             st.markdown(f"**📍 Location:** {location}")
         if attendees:
             st.markdown(f"**👥 Attendees:** {attendees}")
+        contacts = record.get("contacts", [])
+        if contacts:
+            st.markdown("**👤 Contacts:**")
+            render_contact_pills(contacts)
         if description:
             st.markdown("**🗒️ Description:**")
             st.markdown(description)
