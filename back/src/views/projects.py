@@ -2,7 +2,7 @@ import json
 import logging
 import traceback
 
-from db import Project, ProjectFile, get_db
+from db import Contact, ContactProject, Project, ProjectFile, get_db
 from fastapi import APIRouter, HTTPException
 
 router = APIRouter(tags=["Projects"])
@@ -46,6 +46,43 @@ async def get_project_files(project_name: str):
         raise HTTPException(
             status_code=500,
             detail=f"Error retrieving files for project {project_name}: {str(e)}",
+        )
+    finally:
+        db.close()
+
+
+@router.get("/project/{project_name}/contacts")
+async def get_project_contacts(project_name: str):
+    """
+    Get all contacts linked to a specific project.
+    """
+    db = get_db()
+    try:
+        contacts = (
+            db.query(Contact)
+            .join(ContactProject, ContactProject.contact_id == Contact.id)
+            .filter(ContactProject.project_name == project_name)
+            .order_by(Contact.name)
+            .all()
+        )
+        return [
+            {
+                "id": c.id,
+                "name": c.name,
+                "email": c.email,
+                "phone": c.phone,
+                "company": c.company,
+                "role": c.role,
+                "description": c.description,
+            }
+            for c in contacts
+        ]
+    except Exception as e:
+        logging.error(f"Error retrieving contacts for project {project_name}: {str(e)}")
+        logging.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error retrieving contacts for project {project_name}: {str(e)}",
         )
     finally:
         db.close()

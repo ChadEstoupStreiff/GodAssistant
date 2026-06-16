@@ -3,6 +3,7 @@ import json
 import requests
 import streamlit as st
 from core.calendar import box_calendar_record
+from core.contacts import render_contact_pills
 from core.files import display_files, representation_mode_select
 from utils import get_setting, refractor_text_area, toast_for_rerun
 
@@ -58,6 +59,43 @@ def projects():
             st.markdown("### 📝 Description:")
             with st.container(border=True):
                 st.write(project["description"])
+
+        st.markdown("### 👥 People")
+        linked_contacts = requests.get(
+            f"http://back:80/project/{project['name']}/contacts"
+        ).json()
+        all_contacts = requests.get("http://back:80/contacts").json()
+
+        linked_ids = {c["id"] for c in linked_contacts}
+        render_contact_pills(linked_contacts)
+
+        def on_people_change():
+            selected_ids = {
+                c["id"] for c in st.session_state[f"project_people_{project['name']}"]
+            }
+            to_add = selected_ids - linked_ids
+            to_remove = linked_ids - selected_ids
+            for cid in to_add:
+                requests.post(
+                    f"http://back:80/contact/{cid}/project",
+                    params={"project": project["name"]},
+                )
+            for cid in to_remove:
+                requests.delete(
+                    f"http://back:80/contact/{cid}/project",
+                    params={"project": project["name"]},
+                )
+
+        st.multiselect(
+            "Link people",
+            options=all_contacts,
+            default=[c for c in all_contacts if c["id"] in linked_ids],
+            format_func=lambda c: c["name"]
+            + (f" · {c['company']}" if c.get("company") else ""),
+            on_change=on_people_change,
+            key=f"project_people_{project['name']}",
+            label_visibility="collapsed",
+        )
 
     with tabs[1]:
         with st.columns([1, 4])[0]:
