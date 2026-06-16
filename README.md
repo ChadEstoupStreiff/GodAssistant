@@ -87,8 +87,18 @@ Inspired by tools like *Paperless*, it combines full-text search, multi-provider
 ### 🗂️ Projects
 - **Color-coded projects** — name, description, and custom HEX colour badge
 - **Per-project tabs** — Details, Files, Calendar records, Notes, and interactive TODO checklist
+- **People** — link contacts to a project directly from the Details tab; linked members shown as avatar pills
 - **Time tracking** — calendar records linked to a project accumulate total hours shown per project
 - **TODO checklist** — editable table with done/task columns, sorted by completion state
+
+### 👤 Contacts
+- **Contact profiles** — name, email, phone, company, role, description, and a circular profile photo (auto-compressed to 256 × 256 JPEG)
+- **Sidebar search** — filter contacts by name, email, company, role, description, or notes in real time
+- **Per-contact tabs** — Details, Files, Projects & Tags, and Notes
+- **File linking** — search and attach any file in the system to a contact; unlink from the same panel
+- **Project & tag linking** — associate contacts with projects and tags, shown as colour-coded badges with one-click removal
+- **Contact pills** — contacts are rendered as inline avatar + name chips wherever they appear (file viewer, project details, etc.)
+- **Notes** — per-contact Markdown notes with the AI writing assistant available
 
 ### 🏷️ Tags
 - **Colour-coded tags** — create and assign tags with a custom HEX colour
@@ -133,7 +143,9 @@ Inspired by tools like *Paperless*, it combines full-text search, multi-provider
 - **File type distribution** — horizontal bar chart of extension breakdown
 - **Files per project / tag** — colour-coded bar charts
 - **Disk usage widget** — breakdown of model caches, Ollama models, database, and file storage vs total mount capacity
+- **Pinned files** — quick-access panel for pinned files shown at the top of the dashboard
 - **Recent / today / week files** — quick-access panels on the home screen
+- **Optimised loading** — all backend requests fire in parallel; pinned files appear first, then stats one by one, then file panels
 
 ### ⚙️ Settings & Health Monitoring
 - **Project & tag management** — create, edit, and delete from the Settings UI
