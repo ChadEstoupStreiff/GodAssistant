@@ -7,21 +7,33 @@ Inspired by tools like *Paperless*, it combines full-text search, multi-provider
 
 ## 📷 Preview
 
-<img src="assets/home.png" alt="Home Dashboard" width="1000"/>
+<img src="assets/dashboard.png" alt="Home Dashboard" width="1000"/>
 
-*Home dashboard with file metrics, recent files, and disk usage statistics.*
+*Home dashboard with pinned files, recent activity, and at-a-glance statistics.*
 
-<img src="assets/research_card.png" alt="Search Results — Card View" width="1000"/>
+<img src="assets/documents.png" alt="Document Search — Card View" width="1000"/>
 
-*Search results in card view with inline previews.*
-
-<img src="assets/research_line.png" alt="Search Results — Line View" width="1000"/>
-
-*Search results in list/table view for dense scanning.*
+*Document search in card view with inline previews, filters, and tag assignments.*
 
 <img src="assets/view.png" alt="File Viewer" width="1000"/>
 
 *File viewer with AI extraction results, semantic links, and task queue.*
+
+<img src="assets/SOTA.png" alt="State of the Art — Research Bibliography" width="1000"/>
+
+*Research bibliography page with paper metadata, auto-populate, citation generators, and bulk editor.*
+
+<img src="assets/kanban.png" alt="Kanban Board" width="1000"/>
+
+*Kanban board with colour-coded columns, priority levels, and assignee avatars.*
+
+<img src="assets/projects.png" alt="Project Details" width="1000"/>
+
+*Project details with linked contacts, files, calendar records, time spent, and TODO checklist.*
+
+<img src="assets/contacts.png" alt="Contact Profile" width="1000"/>
+
+*Contact profile with photo, details, linked files, projects, and notes.*
 
 <img src="assets/chat.png" alt="AI Chat Assistant" width="1000"/>
 
@@ -31,9 +43,9 @@ Inspired by tools like *Paperless*, it combines full-text search, multi-provider
 
 *Markdown notes editor with live side-by-side preview.*
 
-<img src="assets/params.png" alt="Settings Panel" width="1000"/>
+<img src="assets/settings.png" alt="Settings Panel" width="1000"/>
 
-*Settings panel for AI providers, projects, tags, and automation toggles.*
+*Settings panel for application customization.*
 
 ## 🚀 Features
 
