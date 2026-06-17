@@ -69,6 +69,18 @@ def get_consent():
     return get_setting("telemetry_enabled")
 
 
+def _post_data(client_uuid: str, data: dict) -> int | None:
+    try:
+        r = requests.post(
+            f"{_telemetry_url()}/data/{client_uuid}",
+            json=data,
+            timeout=10,
+        )
+        return r.status_code
+    except Exception:
+        return None
+
+
 def send_daily_ping() -> bool:
     client_uuid = get_or_create_uuid()
     if not client_uuid:
@@ -76,17 +88,20 @@ def send_daily_ping() -> bool:
     data = _collect_data()
     if data is None:
         return False
-    try:
-        r = requests.post(
-            f"{_telemetry_url()}/data/{client_uuid}",
-            json=data,
-            timeout=10,
-        )
-        if r.status_code in (201, 409):
-            set_setting("telemetry_last_sent", str(date.today()))
-            return True
-    except Exception:
-        pass
+
+    status = _post_data(client_uuid, data)
+
+    if status == 401:
+        # UUID was signed with an old secret — fetch a fresh one and retry once
+        set_setting("telemetry_uuid", None)
+        client_uuid = get_or_create_uuid()
+        if not client_uuid:
+            return False
+        status = _post_data(client_uuid, data)
+
+    if status in (201, 409):
+        set_setting("telemetry_last_sent", str(date.today()))
+        return True
     return False
 
 

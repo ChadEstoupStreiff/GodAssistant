@@ -1,16 +1,31 @@
-import uuid
+import hashlib
+import hmac
+import os
+import uuid as uuid_lib
 from datetime import date, datetime
 
 import uvicorn
 from db import get_db, init_db
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from models import DailyAggregate, TelemetryEntry
+from pydantic import BaseModel, ConfigDict, Field
 from scheduler import compute_for_date, start_scheduler
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+_secret = os.getenv("TELEMETRY_SECRET", "")
+if not _secret:
+    raise RuntimeError("TELEMETRY_SECRET environment variable must be set")
+_SECRET = _secret.encode()
+
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="GodAssistant Telemetry")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -18,6 +33,39 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+
+class TelemetryData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    nbr_files: int = Field(ge=0, le=1_000_000)
+    nbr_projects: int = Field(ge=0, le=100_000)
+    nbr_tags: int = Field(ge=0, le=100_000)
+    nbr_calendars: int = Field(ge=0, le=10_000)
+    nbr_hours: float = Field(ge=0, le=1_000_000)
+    nbr_summaries: int = Field(ge=0, le=1_000_000)
+    nbr_links: int = Field(ge=0, le=1_000_000)
+    nbr_contacts: int = Field(ge=0, le=100_000)
+    nbr_tasks: int = Field(ge=0, le=1_000_000)
+    nbr_kanban_boards: int = Field(ge=0, le=10_000)
+    nbr_validated_tasks: int = Field(ge=0, le=1_000_000)
+    files_without_tag: int = Field(ge=0, le=1_000_000)
+    files_without_project: int = Field(ge=0, le=1_000_000)
+    disk_files_bytes: int = Field(ge=0, le=1_000_000_000_000)
+
+
+def _sign_uuid(raw: str) -> str:
+    sig = hmac.new(_SECRET, raw.encode(), hashlib.sha256).hexdigest()[:16]
+    return f"{raw}.{sig}"
+
+
+def _verify_uuid(token: str) -> bool:
+    parts = token.rsplit(".", 1)
+    if len(parts) != 2:
+        return False
+    raw, sig = parts
+    expected = hmac.new(_SECRET, raw.encode(), hashlib.sha256).hexdigest()[:16]
+    return hmac.compare_digest(sig, expected)
 
 
 @app.on_event("startup")
@@ -32,14 +80,24 @@ def health():
 
 
 @app.get("/uuid")
-def generate_uuid():
-    return {"uuid": str(uuid.uuid4())}
+@limiter.limit("10/day")
+def generate_uuid(request: Request):
+    raw = str(uuid_lib.uuid4())
+    return {"uuid": _sign_uuid(raw)}
 
 
 @app.post("/data/{client_uuid}", status_code=201)
-def receive_data(client_uuid: str, data: dict, db: Session = Depends(get_db)):
+@limiter.limit("10/day")
+def receive_data(
+    client_uuid: str,
+    data: TelemetryData,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    if not _verify_uuid(client_uuid):
+        raise HTTPException(status_code=401, detail="Invalid UUID")
     today = date.today()
-    entry = TelemetryEntry(uuid=client_uuid, date=today, data=data)
+    entry = TelemetryEntry(uuid=client_uuid, date=today, data=data.model_dump())
     db.add(entry)
     try:
         db.commit()
@@ -47,7 +105,6 @@ def receive_data(client_uuid: str, data: dict, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=409, detail="Already received data for this UUID today")
 
-    # Recompute today's aggregate immediately so /stats is always fresh
     compute_for_date(today)
     return {"status": "ok"}
 

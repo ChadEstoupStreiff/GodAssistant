@@ -185,6 +185,44 @@ def request_llm(
         except Exception as e:
             raise Exception(f"Gemini response error: {e}")
 
+    # Claude (Anthropic)
+    elif ai_type == "Claude":
+        api_key = get_setting("anthropic_api_key")
+        headers = {
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": model,
+            "max_tokens": 16000,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": True,
+        }
+        url = "https://api.anthropic.com/v1/messages"
+        with requests.post(url, headers=headers, json=payload, stream=True, timeout=3600) as response:
+            if response.status_code != 200:
+                raise Exception(f"Claude error {response.status_code}: {response.text}")
+
+            output = ""
+            for line in response.iter_lines():
+                if line:
+                    line = line.decode("utf-8")
+                    if line.startswith("data: "):
+                        data_str = line[6:]
+                        try:
+                            data = json.loads(data_str)
+                            if data.get("type") == "content_block_delta":
+                                delta = data.get("delta", {})
+                                if delta.get("type") == "text_delta":
+                                    chunk = delta.get("text", "")
+                                    output += chunk
+                                    if stream_callback:
+                                        stream_callback(chunk)
+                        except Exception:
+                            pass
+            return ai_type, model, output
+
     else:
         raise ValueError(f"Unsupported AI type: {ai_type}")
 
@@ -288,6 +326,35 @@ def request_vision_llm(
         if response.status_code != 200:
             raise Exception(f"Gemini vision error {response.status_code}: {response.text}")
         return ai_type, model, response.json()["candidates"][0]["content"]["parts"][0]["text"]
+
+    # Claude (Anthropic)
+    elif ai_type == "Claude":
+        api_key = get_setting("anthropic_api_key")
+        headers = {
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": model,
+            "max_tokens": 1024,
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "image", "source": {"type": "base64", "media_type": mime_type, "data": image_data}},
+                    {"type": "text", "text": prompt},
+                ],
+            }],
+        }
+        response = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers=headers,
+            json=payload,
+            timeout=3600,
+        )
+        if response.status_code != 200:
+            raise Exception(f"Claude vision error {response.status_code}: {response.text}")
+        return ai_type, model, response.json()["content"][0]["text"]
 
     else:
         raise ValueError(f"Unsupported vision AI type: {ai_type}")

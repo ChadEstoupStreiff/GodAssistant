@@ -260,7 +260,7 @@ def chose_ai_menu(default_ai_type: str, default_model: str, key: str = "ai_menu"
     import requests
     import streamlit as st
 
-    ai_type_options = ["llama", "Mistral", "ChatGPT", "Gemini"]
+    ai_type_options = ["llama", "Mistral", "ChatGPT", "Gemini", "Claude"]
     ai_type = st.radio(
         "AI type",
         ai_type_options,
@@ -343,6 +343,23 @@ def chose_ai_menu(default_ai_type: str, default_model: str, key: str = "ai_menu"
             key=f"{key}_model",
             help="Select the Google Gemini model to use.",
         )
+
+    elif ai_type == "Claude":
+        claude_models = [
+            "claude-haiku-4-5",
+            "claude-sonnet-4-6",
+            "claude-opus-4-8",
+            "claude-fable-5",
+        ]
+        model = st.selectbox(
+            "Claude Model",
+            options=claude_models,
+            index=claude_models.index(default_model)
+            if default_model in claude_models
+            else 0,
+            key=f"{key}_model",
+            help="Select the Anthropic Claude model to use.",
+        )
     return ai_type, model
 
 
@@ -356,8 +373,8 @@ def chose_vision_ai_menu(
     import requests
     import streamlit as st
 
-    type_options = [local_key, "llama", "Mistral", "ChatGPT", "Gemini"]
-    type_labels = [local_label, "Local Llama (Ollama)", "Mistral", "ChatGPT", "Gemini"]
+    type_options = [local_key, "llama", "Mistral", "ChatGPT", "Gemini", "Claude"]
+    type_labels = [local_label, "Local Llama (Ollama)", "Mistral", "ChatGPT", "Gemini", "Claude"]
     resolved_default = default_type if default_type in type_options else local_key
     ai_type = st.radio(
         "Provider",
@@ -428,6 +445,20 @@ def chose_vision_ai_menu(
             options=gemini_vision_models,
             index=gemini_vision_models.index(default_model)
             if default_model in gemini_vision_models
+            else 0,
+            key=f"{key}_model",
+        )
+    elif ai_type == "Claude":
+        claude_vision_models = [
+            "claude-haiku-4-5",
+            "claude-sonnet-4-6",
+            "claude-opus-4-8",
+        ]
+        model = st.selectbox(
+            "Claude Vision Model",
+            options=claude_vision_models,
+            index=claude_vision_models.index(default_model)
+            if default_model in claude_vision_models
             else 0,
             key=f"{key}_model",
         )
@@ -817,8 +848,8 @@ def settings():
 
     # MARK: LLM Settings
     with settings_tabs[3]:
-        tab_llama, tab_mistral, tab_chatgpt, tab_gemini, tab_groq = st.tabs(
-            ["Local Llama", "Mistral", "OpenAI ChatGPT", "Google Gemini", "Groq"]
+        tab_llama, tab_mistral, tab_chatgpt, tab_gemini, tab_groq, tab_claude = st.tabs(
+            ["Local Llama", "Mistral", "OpenAI ChatGPT", "Google Gemini", "X Groq", "Anthropic Claude"]
         )
 
         spacer()
@@ -854,7 +885,11 @@ def settings():
 | gpt-3.5-turbo         | ChatGPT   | Fast, general-purpose model for basic conversation and summarization        | **\$1.00 / \$2.00**              |
 | gpt-4.1               | ChatGPT   | Stronger reasoning, faster than GPT-4, versatile                            | **\$2.00 / \$8.00**              |
 | gpt-4o                | ChatGPT   | Top-tier multimodal model (text, image, audio), fast with high accuracy     | **\$2.50 / \$10.00**             |
-| gpt-4                | ChatGPT   | High-quality reasoning and understanding, best for difficult tasks          | **\$30.00 / \$60.00**            |""")
+| gpt-4                | ChatGPT   | High-quality reasoning and understanding, best for difficult tasks          | **\$30.00 / \$60.00**            |
+| claude-haiku-4-5      | Claude    | Fast and cost-effective model for simple tasks, 200k context               | **\$1.00 / \$5.00**              |
+| claude-sonnet-4-6     | Claude    | Balanced speed and intelligence, 1M context                                | **\$3.00 / \$15.00**             |
+| claude-opus-4-8       | Claude    | Most capable Opus-tier, long-horizon agentic work, 1M context              | **\$5.00 / \$25.00**             |
+| claude-fable-5        | Claude    | Most capable Claude model, advanced reasoning, 1M context                  | **\$10.00 / \$50.00**            |""")
 
         elif sort_type == "Capabilities":
             st.markdown("""| Model                 | Type      | Capabilities                                                                 | Input/Output **\$ per 1M tokens** |
@@ -880,7 +915,11 @@ def settings():
 | mistral-large-latest  | Mistral   | Solves complex tasks with high quality, 128k token context                  | **\$2.00 / \$6.00**              |
 | mistral-medium-latest | Mistral   | Cost-efficient enterprise-level performance, 128k token context             | **\$0.40 / \$2.00**              |
 | ministral-3b-latest   | Mistral   | Most efficient edge model, 128k token context                               | **\$0.04 / \$0.04**              |
-| gpt-4o                | ChatGPT   | Top-tier multimodal model (text, image, audio), fast with high accuracy     | **\$2.50 / \$10.00**             |""")
+| gpt-4o                | ChatGPT   | Top-tier multimodal model (text, image, audio), fast with high accuracy     | **\$2.50 / \$10.00**             |
+| claude-haiku-4-5      | Claude    | Fast and cost-effective model for simple tasks, 200k context               | **\$1.00 / \$5.00**              |
+| claude-sonnet-4-6     | Claude    | Balanced speed and intelligence, 1M context                                | **\$3.00 / \$15.00**             |
+| claude-opus-4-8       | Claude    | Most capable Opus-tier, long-horizon agentic work, 1M context              | **\$5.00 / \$25.00**             |
+| claude-fable-5        | Claude    | Most capable Claude model, advanced reasoning, 1M context                  | **\$10.00 / \$50.00**            |""")
 
         elif sort_type == "Pricing":
             st.markdown("""| Model                 | Type      | Capabilities                                                                 | Input/Output **\$ per 1M tokens** |
@@ -906,7 +945,11 @@ def settings():
 | gpt-4.1               | ChatGPT   | Stronger reasoning, faster than GPT-4, versatile                            | **\$2.00 / \$8.00**              |
 | gemini-2.5-flash      | Gemini    | Hybrid reasoning model for speed and broad media support                    | **\$0.30 / \$2.50**              |
 | gpt-4o                | ChatGPT   | Top-tier multimodal model (text, image, audio), fast with high accuracy     | **\$2.50 / \$10.00**             |
-| gpt-4                | ChatGPT   | High-quality reasoning and understanding, best for difficult tasks          | **\$30.00 / \$60.00**            |""")
+| gpt-4                | ChatGPT   | High-quality reasoning and understanding, best for difficult tasks          | **\$30.00 / \$60.00**            |
+| claude-haiku-4-5      | Claude    | Fast and cost-effective model for simple tasks, 200k context               | **\$1.00 / \$5.00**              |
+| claude-sonnet-4-6     | Claude    | Balanced speed and intelligence, 1M context                                | **\$3.00 / \$15.00**             |
+| claude-opus-4-8       | Claude    | Most capable Opus-tier, long-horizon agentic work, 1M context              | **\$5.00 / \$25.00**             |
+| claude-fable-5        | Claude    | Most capable Claude model, advanced reasoning, 1M context                  | **\$10.00 / \$50.00**            |""")
 
         with tab_llama:
             st.image(
@@ -1037,7 +1080,7 @@ def settings():
                 width=300,
             )
             st.text(
-                "Groq provides ultra-fast inference for Whisper transcription models. Ideal for fast and accurate audio transcription."
+                "Groq provides ultra-fast inference for Whisper transcription models. Ideal for fast and accurate audio transcription. American 🇺🇸 with very few moral principles, very libertarian values."
             )
             groq_api_key = settings.get("groq_api_key", "")
             new_groq_api_key = st.text_input(
@@ -1049,6 +1092,27 @@ def settings():
             )
             if new_groq_api_key != groq_api_key:
                 settings["groq_api_key"] = new_groq_api_key
+                apply_settings(settings)
+
+        with tab_claude:
+            st.image(
+                "https://cdn.prod.website-files.com/66eaebf7f23c6ba827f8ce13/69628de01f08a5bb754d2581_Frame%202147223634%20(1)%20(1).webp",
+                width=300,
+            )
+            st.text(
+                "Anthropic Claude is a family of powerful and safety-focused LLMs. "
+                "Best for complex reasoning, long context, and agentic tasks. American 🇺🇸"
+            )
+            anthropic_api_key = settings.get("anthropic_api_key", "")
+            new_anthropic_api_key = st.text_input(
+                "Anthropic API Key",
+                value=anthropic_api_key,
+                type="password",
+                help="Enter your Anthropic API key to use Claude models.",
+                key="anthropic_api_key",
+            )
+            if new_anthropic_api_key != anthropic_api_key:
+                settings["anthropic_api_key"] = new_anthropic_api_key
                 apply_settings(settings)
 
         if len(groq_api_key) > 0:
@@ -1118,6 +1182,27 @@ def settings():
                             st.toast("Google Gemini API key is invalid.", icon="❌")
                     except requests.RequestException as e:
                         st.toast(f"Gemini check failed: {e}", icon="⚠️")
+
+        if len(anthropic_api_key) > 0:
+            with tab_claude:
+                with st.spinner("Checking Anthropic key...", show_time=True):
+                    try:
+                        headers = {
+                            "x-api-key": anthropic_api_key,
+                            "anthropic-version": "2023-06-01",
+                        }
+                        response = requests.get(
+                            "https://api.anthropic.com/v1/models",
+                            headers=headers,
+                            timeout=10,
+                        )
+                        if response.status_code == 200:
+                            st.success("Anthropic API key is valid.", icon="✅")
+                        else:
+                            st.error("Anthropic API key is invalid.", icon="❌")
+                            st.toast("Anthropic API key is invalid.", icon="❌")
+                    except requests.RequestException as e:
+                        st.toast(f"Anthropic check failed: {e}", icon="⚠️")
 
     # MARK: Telemetry
     with settings_tabs[5]:

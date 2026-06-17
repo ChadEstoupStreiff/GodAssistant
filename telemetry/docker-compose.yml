@@ -9,6 +9,7 @@ services:
       - "${DATA_PATH}/telemetry:/data"
     environment:
       - DATA_PATH=/data
+      - TELEMETRY_SECRET=${TELEMETRY_SECRET}
     networks:
       - telemetry_net
 

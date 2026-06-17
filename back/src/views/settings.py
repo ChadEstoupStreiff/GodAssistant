@@ -46,6 +46,7 @@ default_settings = {
     "openai_api_key": "",
     "gemini_api_key": "",
     "groq_api_key": "",
+    "anthropic_api_key": "",
     "telemetry_enabled": None,
     "telemetry_uuid": "",
     "telemetry_last_sent": "",
