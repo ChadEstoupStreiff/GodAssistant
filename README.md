@@ -2,6 +2,35 @@
 
 # AthenaCognis
 
+<p align="center">
+  <img src="https://img.shields.io/badge/Document_Management-555?style=flat-square" alt="Document Management"/>
+  <img src="https://img.shields.io/badge/Knowledge_Base-555?style=flat-square" alt="Knowledge Base"/>
+  <img src="https://img.shields.io/badge/AI_Extraction-555?style=flat-square" alt="AI Extraction"/>
+  <img src="https://img.shields.io/badge/Full--text_Search-555?style=flat-square" alt="Full-text Search"/>
+  <img src="https://img.shields.io/badge/Task_Management-555?style=flat-square" alt="Task Management"/>
+  <img src="https://img.shields.io/badge/Research_Bibliography-555?style=flat-square" alt="Research Bibliography"/>
+  <img src="https://img.shields.io/badge/Time_Tracking-555?style=flat-square" alt="Time Tracking"/>
+  <img src="https://img.shields.io/badge/Note--taking-555?style=flat-square" alt="Note-taking"/>
+  <br/>
+  <img src="https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python"/>
+  <img src="https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI"/>
+  <img src="https://img.shields.io/badge/Streamlit-FF4B4B?style=flat-square&logo=streamlit&logoColor=white" alt="Streamlit"/>
+  <img src="https://img.shields.io/badge/MariaDB-003545?style=flat-square&logo=mariadb&logoColor=white" alt="MariaDB"/>
+  <img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker"/>
+  <br/>
+  <img src="https://img.shields.io/badge/Ollama-000000?style=flat-square&logoColor=white" alt="Ollama"/>
+  <img src="https://img.shields.io/badge/OpenAI-412991?style=flat-square&logo=openai&logoColor=white" alt="OpenAI"/>
+  <img src="https://img.shields.io/badge/Mistral_AI-FF7000?style=flat-square&logoColor=white" alt="Mistral AI"/>
+  <img src="https://img.shields.io/badge/Gemini-8E75B2?style=flat-square&logo=googlegemini&logoColor=white" alt="Gemini"/>
+  <img src="https://img.shields.io/badge/Groq-F55036?style=flat-square&logoColor=white" alt="Groq"/>
+  <img src="https://img.shields.io/badge/Claude-CC785C?style=flat-square&logo=anthropic&logoColor=white" alt="Claude"/>
+  <br/>
+  <img src="https://img.shields.io/badge/Self--Hosted-2ea44f?style=flat-square" alt="Self-Hosted"/>
+  <img src="https://img.shields.io/badge/Local_AI-7B2FBE?style=flat-square" alt="Local AI"/>
+  <img src="https://img.shields.io/badge/Open_Source-❤-e05d44?style=flat-square" alt="Open Source"/>
+  <img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="MIT License"/>
+</p>
+
 **AthenaCognis** is a self-hosted, AI-powered document management and knowledge assistant.
 Inspired by tools like *Paperless*, it combines full-text search, multi-provider AI extraction, project and task management, research bibliography tools, and productivity tracking, all in one web application that keeps your data on your own infrastructure.
 
