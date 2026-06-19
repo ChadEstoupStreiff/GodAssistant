@@ -33,3 +33,6 @@ torchvision
 
 # LLM
 tiktoken
+
+# SEMANTIC SEARCH
+sentence-transformers

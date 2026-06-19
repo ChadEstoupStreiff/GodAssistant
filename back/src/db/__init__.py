@@ -3,6 +3,7 @@ from db.db import DB, get_db
 from db.models import (
     Setting,
     Note,
+    Embedding,
     OCR,
     OCRTask,
     Summary,

@@ -58,6 +58,14 @@ class OCRTask(Base):
     result = Column(TEXT, nullable=True)
 
 
+class Embedding(Base):
+    __tablename__ = "Embedding"
+
+    file = Column(String(512), primary_key=True, index=True)
+    date = Column(DateTime, nullable=False)
+    vector = Column(TEXT, nullable=False)  # JSON array of 384 floats
+
+
 class Summary(Base):
     __tablename__ = "Summary"
 

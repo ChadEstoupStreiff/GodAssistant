@@ -553,97 +553,61 @@ def settings():
         loaded_settings = load_settings()
         settings = copy.deepcopy(loaded_settings)
 
-        cols = st.columns(6)
-        with cols[0]:
-            settings["auto_display_file_size_limit"] = st.number_input(
-                "Auto display file size limit (MB), -1 to disable",
-                min_value=-1,
-                value=settings.get("auto_display_file_size_limit", 10),
-                help="Set the maximum file size (in MB) for automatic display in the viewer.",
-            )
-
-        with cols[1]:
-            settings["search_default_timeframe_days"] = st.number_input(
-                "Default search timeframe (days)",
-                min_value=1,
-                value=settings.get("search_default_timeframe_days", 30),
-                help="Set the default timeframe (in days) for search operations.",
-            )
-
-        with cols[2]:
-            settings["target_hourly_working_time"] = st.number_input(
-                "Target hourly working time (hours)",
-                min_value=0.0,
-                value=settings.get("target_hourly_working_time", 7.5),
-                help="Set the target hourly working time (in hours) for productivity tracking. +-1 hour tolerance.",
-            )
-
-        representation_options = ["🧮 Table", "🃏 Cards", "🏷️ List"]
-        with cols[3]:
-            settings["explorer_default_representation_mode"] = st.segmented_control(
-                "Default representation mode in EXPLORER",
-                options=range(len(representation_options)),
-                format_func=lambda x: representation_options[x],
-                default=settings.get("explorer_default_representation_mode", 1),
-                key="representation",
-            )
-        with cols[4]:
-            settings["projects_default_representation_mode"] = st.segmented_control(
-                "Default representation mode in PROJECTS",
-                options=range(len(representation_options)),
-                format_func=lambda x: representation_options[x],
-                default=settings.get("projects_default_representation_mode", 1),
-                key="projects_representation",
-            )
-        with cols[5]:
-            settings["chat_files_default_representation_mode"] = st.segmented_control(
-                "Default representation mode in CHAT",
-                options=range(len(representation_options)),
-                format_func=lambda x: representation_options[x],
-                default=settings.get("chat_files_default_representation_mode", 0),
-                key="chat_representation",
-            )
-
-
         cols = st.columns(2)
         with cols[0]:
-            
-            with st.expander("Preview Settings", expanded=True):
-                settings["enable_auto_preview"] = st.toggle(
-                    "Auto-generate previews on upload",
-                    value=settings.get("enable_auto_preview", True),
-                )
-                quality_options = ["low", "medium", "high"]
-                quality_labels = ["Low (144p)", "Medium (360p)", "High (720p)"]
-                current_quality = settings.get("preview_quality", "medium")
-                settings["preview_quality"] = st.radio(
-                    "Preview quality",
-                    options=quality_options,
-                    format_func=lambda x: quality_labels[quality_options.index(x)],
-                    index=quality_options.index(current_quality)
-                    if current_quality in quality_options
-                    else 1,
-                    horizontal=True,
-                    help="Resolution of image/PDF thumbnails.",
-                )
-                sub_cols = st.columns(2)
+            with st.expander("General Settings", expanded=True):
+                sub_cols = st.columns(3)
                 with sub_cols[0]:
-                    settings["preview_text_chars"] = st.number_input(
-                        "Text preview characters",
-                        min_value=50,
-                        max_value=5000,
-                        value=int(settings.get("preview_text_chars", 300)),
-                        step=50,
-                        help="Number of characters to show for text file previews.",
+                    settings["auto_display_file_size_limit"] = st.number_input(
+                        "Auto display file size limit (MB), -1 to disable",
+                        min_value=-1,
+                        value=settings.get("auto_display_file_size_limit", 10),
+                        help="Set the maximum file size (in MB) for automatic display in the viewer.",
+                    )
+                    settings["target_hourly_working_time"] = st.number_input(
+                        "Calendar target hourly working time",
+                        min_value=0.0,
+                        value=settings.get("target_hourly_working_time", 7.5),
+                        help="Set the target hourly working time (in hours) for productivity tracking. +-1 hour tolerance.",
                     )
                 with sub_cols[1]:
-                    settings["preview_zip_subfiles"] = st.number_input(
-                        "Archive preview entries",
+                    settings["search_default_timeframe_days"] = st.number_input(
+                        "Search engine default search timeframe (days)",
                         min_value=1,
-                        max_value=100,
-                        value=int(settings.get("preview_zip_subfiles", 15)),
-                        step=1,
-                        help="Number of archive entries to list in zip/tar previews.",
+                        value=settings.get("search_default_timeframe_days", 30),
+                        help="Set the default timeframe (in days) for search operations.",
+                    )
+                    settings["semantic_similarity_threshold"] = st.slider(
+                        "✨ Search Engine Semantic boost threshold",
+                        min_value=0.0,
+                        max_value=1.0,
+                        value=float(settings.get("semantic_similarity_threshold", 0.4)),
+                        step=0.05,
+                        format="%.2f",
+                        help="Minimum cosine similarity for a file to be included by the Semantic boost. Lower = more results but less precise. 0.4 is a good default.",
+                    )
+                representation_options = ["🧮 Table", "🃏 Cards", "🏷️ List"]
+                with sub_cols[2]:
+                    settings["explorer_default_representation_mode"] = st.segmented_control(
+                        "Default representation mode in EXPLORER",
+                        options=range(len(representation_options)),
+                        format_func=lambda x: representation_options[x],
+                        default=settings.get("explorer_default_representation_mode", 1),
+                        key="representation",
+                    )
+                    settings["projects_default_representation_mode"] = st.segmented_control(
+                        "Default representation mode in PROJECTS",
+                        options=range(len(representation_options)),
+                        format_func=lambda x: representation_options[x],
+                        default=settings.get("projects_default_representation_mode", 1),
+                        key="projects_representation",
+                    )
+                    settings["chat_files_default_representation_mode"] = st.segmented_control(
+                        "Default representation mode in CHAT",
+                        options=range(len(representation_options)),
+                        format_func=lambda x: representation_options[x],
+                        default=settings.get("chat_files_default_representation_mode", 0),
+                        key="chat_representation",
                     )
 
             with st.expander("Calendar Progress Bar", expanded=True):
@@ -711,6 +675,44 @@ def settings():
                 )
 
         with cols[1]:
+            with st.expander("Preview Settings", expanded=True):
+                settings["enable_auto_preview"] = st.toggle(
+                    "Auto-generate previews on upload",
+                    value=settings.get("enable_auto_preview", True),
+                )
+                quality_options = ["low", "medium", "high"]
+                quality_labels = ["Low (144p)", "Medium (360p)", "High (720p)"]
+                current_quality = settings.get("preview_quality", "medium")
+                settings["preview_quality"] = st.radio(
+                    "Preview quality",
+                    options=quality_options,
+                    format_func=lambda x: quality_labels[quality_options.index(x)],
+                    index=quality_options.index(current_quality)
+                    if current_quality in quality_options
+                    else 1,
+                    horizontal=True,
+                    help="Resolution of image/PDF thumbnails.",
+                )
+                sub_cols = st.columns(2)
+                with sub_cols[0]:
+                    settings["preview_text_chars"] = st.number_input(
+                        "Text preview characters",
+                        min_value=50,
+                        max_value=5000,
+                        value=int(settings.get("preview_text_chars", 300)),
+                        step=50,
+                        help="Number of characters to show for text file previews.",
+                    )
+                with sub_cols[1]:
+                    settings["preview_zip_subfiles"] = st.number_input(
+                        "Archive preview entries",
+                        min_value=1,
+                        max_value=100,
+                        value=int(settings.get("preview_zip_subfiles", 15)),
+                        step=1,
+                        help="Number of archive entries to list in zip/tar previews.",
+                    )
+
             with st.expander("Summarization Settings", expanded=True):
                 settings["enable_auto_summary"] = st.toggle(
                     "Enable auto Summarization",

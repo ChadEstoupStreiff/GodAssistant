@@ -87,16 +87,19 @@ def search_files_stream(
     exclude_subfolders=False,
     exclude_projects=False,
     exclude_tags=False,
+    semantic=False,
+    similarity_threshold=0.4,
 ):
     """Generator that yields event dicts from the backend NDJSON stream.
 
     Event types:
-      {"type": "total",    "count": N}
-      {"type": "progress", "current": i, "total": N, "file": name}
-      {"type": "result",   "path": "/shared/..."}
-      {"type": "error",    "message": "..."}
+      {"type": "total",              "count": N}
+      {"type": "progress",           "current": i, "total": N, "file": name}
+      {"type": "semantic_searching", "count": N}
+      {"type": "result",             "path": "/shared/..."}
+      {"type": "error",              "message": "..."}
     """
-    request = f"http://back:80/files/search/stream?start_date={start_date}&end_date={end_date}&search_mode={search_mode}"
+    request = f"http://back:80/files/search/stream?start_date={start_date}&end_date={end_date}&search_mode={search_mode}&semantic={semantic}&similarity_threshold={similarity_threshold}"
     if text is not None:
         request += f"&text={text}"
     if subfolder is not None and len(subfolder) > 0:
@@ -142,6 +145,8 @@ def run_streaming_search(search_params):
             exclude_subfolders=search_params["exclude_subfolders"],
             exclude_projects=search_params["exclude_projects"],
             exclude_tags=search_params["exclude_tags"],
+            semantic=search_params.get("semantic", False),
+            similarity_threshold=float(get_setting("semantic_similarity_threshold", 0.4)),
         ):
             etype = event.get("type")
             if etype == "total":
@@ -154,6 +159,9 @@ def run_streaming_search(search_params):
                     f"Watching {event['current']} / {event['total']}  —  {event.get('file', '')}"
                 )
                 pbar.update(1)
+            elif etype == "semantic_searching":
+                pbar.set_description(f"✨ Checking {event['count']} files semantically...")
+                pbar.refresh()
             elif etype == "result":
                 files.append(event["path"])
             elif etype == "error":
@@ -264,7 +272,7 @@ def search_engine(
                 )
 
         with cols[5 % nbr_columns]:
-            with st.container(height=120, border=False):
+            with st.container(border=False):
                 representation_options = [
                     "⚡️",
                     "🔍",
@@ -280,6 +288,11 @@ def search_engine(
                 )
                 if search_mode is None:
                     search_mode = 1
+                semantic = st.toggle(
+                    "✨ Semantic boost",
+                    key="semantic_boost",
+                    help="After the keyword search, also include files that are semantically close to your query — even if they contain none of the typed words.",
+                )
         if force_types is not None or force_subfolder is not None or force_tags is not None or force_projects is not None:
             forced_caption = "Forced filters applied:"
             if force_types is not None:
@@ -328,6 +341,7 @@ def search_engine(
                     "exclude_subfolders": exuclude_subfolders,
                     "exclude_projects": exclude_projects,
                     "exclude_tags": exclude_tags,
+                    "semantic": semantic,
                 }
             return search_files(
                 text,

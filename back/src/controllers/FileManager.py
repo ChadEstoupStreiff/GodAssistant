@@ -1,7 +1,10 @@
 import logging
 import os
+import re
 from datetime import datetime
 from typing import List
+
+import numpy as np
 
 from controllers.NoteManager import NoteManager
 from controllers.SummarizeManager import SummarizeManager
@@ -218,6 +221,8 @@ class FileManager:
         exclude_subfolders: bool = False,
         exclude_projects: bool = False,
         exclude_tags: bool = False,
+        semantic: bool = False,
+        similarity_threshold: float = 0.4,
     ):
         """Sync generator that yields event dicts for streaming search results."""
         try:
@@ -238,8 +243,31 @@ class FileManager:
             total = len(files)
             yield {"type": "total", "count": total}
 
-            # Split query into words so any word matching triggers a result (OR behaviour)
-            query_words = [w.lower() for w in text.strip().split()] if text else []
+            # If the query contains no special characters, strip them from both
+            # sides so "UNet" matches "U-net", "u_net", "U:Net", etc.
+            _special = re.compile(r'[^a-zA-Z0-9\s]')
+            _strip = re.compile(r'[^a-z0-9\s]')
+            normalize = text is not None and not _special.search(text.strip())
+
+            if text:
+                raw_words = text.strip().lower().split()
+                if normalize:
+                    query_words = [re.sub(r'[^a-z0-9]', '', w) for w in raw_words]
+                    query_words = [w for w in query_words if w]
+                else:
+                    query_words = raw_words
+            else:
+                query_words = []
+
+            def prep(s):
+                if not s:
+                    return ''
+                return _strip.sub('', s.lower()) if normalize else s.lower()
+
+            # When semantic boost is on, collect files that didn't match the
+            # substring filter so we can check them semantically afterwards.
+            # Only meaningful when there is a text query to embed.
+            non_substring = [] if (semantic and query_words) else None
 
             for i, file in enumerate(files):
                 filename = os.path.basename(file)
@@ -247,28 +275,48 @@ class FileManager:
                 yield {"type": "progress", "current": i + 1, "total": total, "file": filename}
 
                 if query_words:
-                    parts = [filename.lower()]
+                    parts = [prep(filename)]
 
                     summary_keywords = SummarizeManager.get(file)
                     if summary_keywords is not None:
-                        parts.append(",".join(summary_keywords.get("keywords", [])).lower())
+                        parts.append(prep(",".join(summary_keywords.get("keywords", []))))
                         if search_mode != 0:
-                            parts.append(summary_keywords.get("summary", "").lower())
+                            parts.append(prep(summary_keywords.get("summary", "")))
 
                     if search_mode == 2:
                         content = read_content(file, force_read=True)
                         if content:
-                            parts.append(content.lower())
+                            parts.append(prep(content))
 
                     note = NoteManager.get(file)
                     if note:
-                        parts.append(note.get("note", "").lower())
+                        parts.append(prep(note.get("note", "")))
 
                     combined = " ".join(parts)
                     if any(word in combined for word in query_words):
                         yield {"type": "result", "path": file}
+                    elif non_substring is not None:
+                        non_substring.append(file)
                 else:
                     yield {"type": "result", "path": file}
+
+            # Semantic expansion phase — find files not caught by substring
+            # that are semantically close enough to the query.
+            if non_substring:
+                from controllers.EmbeddingManager import EmbeddingManager
+
+                yield {"type": "semantic_searching", "count": len(non_substring)}
+
+                query_vec = EmbeddingManager.encode_query(text)
+
+                missing = [f for f in non_substring if EmbeddingManager.get(f) is None]
+                if missing:
+                    EmbeddingManager.batch_generate(missing)
+
+                for file in non_substring:
+                    vec = EmbeddingManager.get(file)
+                    if vec is not None and float(np.dot(query_vec, vec)) >= similarity_threshold:
+                        yield {"type": "result", "path": file}
 
         except Exception as e:
             logging.error(f"Error in stream_search: {str(e)}")

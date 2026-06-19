@@ -269,6 +269,27 @@ def edit_tags_dialog(files, key="edit_tags"):
             st.rerun()
 
 
+@st.dialog("📥 Download Files", width="small")
+def download_all_dialog(files, key="download_all"):
+    st.write(f"Preparing archive of **{len(files)}** file(s)...")
+    with st.spinner("Building ZIP..."):
+        r = requests.post(
+            "http://back:80/files/download-zip",
+            json=files,
+        )
+    if r.status_code == 200:
+        st.download_button(
+            "⬇️ Download ZIP",
+            data=r.content,
+            file_name="selection.zip",
+            mime="application/zip",
+            use_container_width=True,
+            key=f"{key}_download_btn",
+        )
+    else:
+        st.error(f"Failed to create archive: {r.text}")
+
+
 @st.dialog("✨ AI Actions", width="small")
 def ai_actions_dialog(files, key="ai_actions"):
     if st.button(
@@ -372,7 +393,7 @@ def multi_select_menu(
 
     select_default_value = False
     if interact_mode == multiple_selection_options[1]:
-        with cols[0 if disable_pill else 1]:
+        with cols[0]:
             if not disable_pill:
                 spacer()
             select_default_value = st.checkbox(
@@ -420,14 +441,14 @@ def multi_select_actions_menu(selected_files, key: str = "multi_select", cols=No
             key=f"{key}_download_all",
             disabled=len(selected_files) == 0,
         ):
-            # TODO implement download all files
-            pass
+            download_all_dialog(selected_files, key=key)
     with cols[6]:
         spacer(25)
         if st.button(
-            "🖼️ Generate Previews",
+            "🖼️ Regenerate",
             use_container_width=True,
             key=f"{key}_generate_previews",
+            help="Regenerate previews for selected files. This will overwrite existing previews.",
             disabled=len(selected_files) == 0,
         ):
             errors = []

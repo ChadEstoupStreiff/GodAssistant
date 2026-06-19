@@ -16,10 +16,10 @@ from controllers.SummarizeManager import SummarizeManager
 from controllers.TranscriptionManager import TranscriptionManager
 from db import get_db
 from db.models import Note, ProjectFile, TagFile, Link, StockPile, Contact, ContactFile
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, Body, HTTPException, UploadFile
 from PIL import Image
 from pillow_heif import register_heif_opener
-from starlette.responses import FileResponse, StreamingResponse
+from starlette.responses import FileResponse, Response, StreamingResponse
 from utils import guess_mime, walk_files
 from views.settings import get_setting
 from views.stockpile import StockPile, get_recent_added
@@ -359,6 +359,39 @@ async def get_file(file: str):
         raise HTTPException(status_code=404, detail=f"File {file} not found.")
 
 
+@router.post("/download-zip")
+def download_zip(files: List[str] = Body(...)):
+    """Build an in-memory ZIP of the requested files.
+
+    Each entry is named <date>_<original_filename> where <date> comes from the
+    second path component of /shared/<date>/...
+    """
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        seen = {}
+        for file_path in files:
+            if not os.path.exists(file_path):
+                continue
+            parts = file_path.split("/")
+            date = parts[2] if len(parts) > 2 else "unknown"
+            filename = os.path.basename(file_path)
+            arcname = f"{date}_{filename}"
+            # Deduplicate: if the same name would appear twice, suffix with a counter
+            if arcname in seen:
+                seen[arcname] += 1
+                stem, ext = os.path.splitext(arcname)
+                arcname = f"{stem}_{seen[arcname]}{ext}"
+            else:
+                seen[arcname] = 0
+            zf.write(file_path, arcname)
+    buffer.seek(0)
+    return Response(
+        content=buffer.read(),
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="selection.zip"'},
+    )
+
+
 @router.get("/metadata/{file:path}")
 async def get_file_metadata(file: str):
     """
@@ -491,6 +524,8 @@ def search_files_stream(
     exclude_subfolders: bool = False,
     exclude_projects: bool = False,
     exclude_tags: bool = False,
+    semantic: bool = False,
+    similarity_threshold: float = 0.4,
 ):
     """Search for files and stream progress + results as NDJSON."""
     if text is not None and len(text) == 0:
@@ -518,6 +553,8 @@ def search_files_stream(
             exclude_subfolders=exclude_subfolders,
             exclude_projects=exclude_projects,
             exclude_tags=exclude_tags,
+            semantic=semantic,
+            similarity_threshold=similarity_threshold,
         ):
             yield json.dumps(event) + "\n"
 
